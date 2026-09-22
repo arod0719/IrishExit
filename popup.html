@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IrishExit — Auto Leave for Google Meet</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand">
+        <img id="headerLogo" src="icons/icon-off-48.png" alt="IrishExit" class="header-logo">
+        <div>
+          <h1>IrishExit</h1>
+          <p id="headerSub" class="subtitle">Toggle ON for This Meeting</p>
+        </div>
+      </div>
+      <label class="switch" title="Turn Auto-Leave ON or OFF for the current meeting">
+        <input type="checkbox" id="meetingToggle">
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <section class="live-card" id="liveCard">
+      <div class="live-header">
+        <span id="callStatusBadge" class="badge badge-idle">No Active Meet Tab</span>
+        <button type="button" id="resetPeakBtn" class="btn-link" title="Reset peak to current count">Reset Peak</button>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-label">Peak</span>
+          <span class="metric-val" id="peakVal">—</span>
+        </div>
+        <div class="metric-box">
+          <span class="metric-label">Now</span>
+          <span class="metric-val" id="nowVal">—</span>
+        </div>
+        <div class="metric-box highlight">
+          <span class="metric-label">Leaves At</span>
+          <span class="metric-val" id="leaveAtVal">—</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="presets">
+      <span class="section-label">Exit Presets:</span>
+      <div class="preset-buttons">
+        <button type="button" class="btn-preset" id="presetFast">Quick Exit (-20% / ≤3)</button>
+        <button type="button" class="btn-preset" id="presetBalanced">Balanced (-30% / ≤2)</button>
+        <button type="button" class="btn-preset" id="presetLarge">Slow Exit (-40% / ≤2)</button>
+      </div>
+    </section>
+
+    <section class="rules-section">
+      <span class="section-label">Leave Triggers (Fires when EITHER rule is met):</span>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="useDropPercent" checked>
+          <span>Drop % from Peak</span>
+        </label>
+        <div class="input-group">
+          <input type="number" id="dropPercent" min="10" max="90" step="5" value="30">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="useMinFloor" checked>
+          <span>Minimum Room Floor (≤)</span>
+        </label>
+        <div class="input-group">
+          <input type="number" id="minFloor" min="1" max="50" step="1" value="2">
+          <span class="unit">left</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="rules-section">
+      <span class="section-label">Meeting &amp; Safety Preferences:</span>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="autoArmNewMeetings">
+          <span>Auto-Turn ON for Every New Meeting</span>
+        </label>
+      </div>
+
+      <div class="rule-row">
+        <span class="rule-text">Min Peak to Arm (Wait at start)</span>
+        <div class="input-group">
+          <input type="number" id="minPeakToArm" min="2" max="100" step="1" value="3">
+          <span class="unit">people</span>
+        </div>
+      </div>
+
+      <div class="rule-row">
+        <span class="rule-text">Sustained Drop Delay</span>
+        <div class="input-group">
+          <input type="number" id="sustainedSeconds" min="0" max="30" step="1" value="2">
+          <span class="unit">sec</span>
+        </div>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="hardDisconnectFailsafe" checked>
+          <span>Hard WebRTC Disconnect Failsafe</span>
+        </label>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="closeTabOnLeave">
+          <span>Close Meet Tab Completely on Leave</span>
+        </label>
+      </div>
+
+      <div class="rule-row">
+        <label class="rule-check">
+          <input type="checkbox" id="showHud" checked>
+          <span>Show In-Call Toggle Pill on Meet</span>
+        </label>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span id="saveStatus" class="save-status">All changes auto-saved</span>
+      <button type="button" id="testLeaveBtn" class="btn-danger">Test Leave Now</button>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

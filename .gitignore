@@ -1,0 +1,10 @@
+# Build and package archives
+*.zip
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Local corporate / test overrides
+manifest.corp.json
+*.local.json
