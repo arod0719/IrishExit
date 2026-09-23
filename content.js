@@ -511,6 +511,57 @@
     evaluateCallState();
   }
 
+  function resetPeakToCurrent() {
+    state.peakParticipants = state.currentParticipants;
+    state.triggerStartTime = null;
+    evaluateCallState();
+    return state.peakParticipants;
+  }
+
+  function updateHudPosition(container) {
+    if (!container) return;
+
+    let targetTop = 10;
+    let targetRight = 120;
+
+    // Scan for Google Meet's top-right header controls (participant chip, Gemini button, etc.)
+    const topButtons = [];
+    const candidates = document.querySelectorAll('button, [role="button"], [data-panel-id="1"]');
+    for (const el of candidates) {
+      if (el === container || container.contains(el)) continue;
+      const rect = el.getBoundingClientRect();
+      if (
+        rect.top >= 0 &&
+        rect.top < 65 &&
+        rect.right > window.innerWidth - 350 &&
+        rect.width >= 16 &&
+        rect.height >= 16
+      ) {
+        topButtons.push(rect);
+      }
+    }
+
+    if (topButtons.length > 0) {
+      let minLeft = Infinity;
+      let matchingTop = 10;
+      let matchingHeight = 36;
+      for (const r of topButtons) {
+        if (r.left < minLeft && r.left > 80) {
+          minLeft = r.left;
+          matchingTop = r.top;
+          matchingHeight = r.height;
+        }
+      }
+      if (minLeft < window.innerWidth && minLeft > 80) {
+        targetRight = window.innerWidth - minLeft + 8;
+        targetTop = Math.max(6, Math.round(matchingTop + (matchingHeight - 32) / 2));
+      }
+    }
+
+    container.style.top = `${targetTop}px`;
+    container.style.right = `${targetRight}px`;
+  }
+
   function createHudElements() {
     if (hudElements) {
       return hudElements;
@@ -519,73 +570,180 @@
     const container = document.createElement('div');
     container.id = 'irishexit-hud';
     container.style.position = 'fixed';
-    container.style.bottom = '84px';
-    container.style.left = '16px';
+    container.style.top = '10px';
+    container.style.right = '120px';
     container.style.zIndex = '2147483646';
-    container.style.backgroundColor = 'rgba(15, 23, 42, 0.94)';
-    container.style.color = '#f8fafc';
-    container.style.border = '1px solid rgba(148, 163, 184, 0.3)';
-    container.style.borderRadius = '12px';
-    container.style.padding = '8px 12px';
+    container.style.height = '32px';
+    container.style.boxSizing = 'border-box';
+    container.style.padding = '0 12px 0 10px';
+    container.style.borderRadius = '9999px';
+    container.style.backgroundColor = 'rgba(32, 33, 36, 0.9)';
+    container.style.backdropFilter = 'blur(8px)';
+    container.style.webkitBackdropFilter = 'blur(8px)';
+    container.style.border = '1px solid rgba(255, 255, 255, 0.16)';
+    container.style.color = '#e8eaed';
     container.style.fontFamily = 'Google Sans, Roboto, -apple-system, BlinkMacSystemFont, sans-serif';
     container.style.fontSize = '12px';
-    container.style.lineHeight = '1.4';
-    container.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.45)';
-    container.style.backdropFilter = 'blur(8px)';
-    container.style.display = 'none';
+    container.style.fontWeight = '500';
+    container.style.lineHeight = '30px';
+    container.style.cursor = 'pointer';
     container.style.userSelect = 'none';
+    container.style.display = 'none';
+    container.style.alignItems = 'center';
+    container.style.gap = '6px';
+    container.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.35)';
+    container.style.transition =
+      'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease';
 
-    const topRow = document.createElement('div');
-    topRow.style.display = 'flex';
-    topRow.style.alignItems = 'center';
-    topRow.style.gap = '8px';
+    const iconSpan = document.createElement('span');
+    iconSpan.style.display = 'inline-flex';
+    iconSpan.style.alignItems = 'center';
+    iconSpan.style.fontSize = '13px';
+    iconSpan.style.lineHeight = '1';
+    iconSpan.textContent = '🍀';
 
     const statusDot = document.createElement('span');
-    statusDot.style.width = '8px';
-    statusDot.style.height = '8px';
+    statusDot.style.width = '7px';
+    statusDot.style.height = '7px';
     statusDot.style.borderRadius = '50%';
-    statusDot.style.backgroundColor = '#64748b';
+    statusDot.style.backgroundColor = '#9aa0a6';
     statusDot.style.display = 'inline-block';
     statusDot.style.flexShrink = '0';
+    statusDot.style.transition = 'background-color 0.15s ease, box-shadow 0.15s ease';
 
     const titleText = document.createElement('span');
-    titleText.style.fontWeight = '600';
+    titleText.style.fontWeight = '500';
     titleText.style.letterSpacing = '0.01em';
-    titleText.textContent = 'IrishExit: OFF';
+    titleText.style.whiteSpace = 'nowrap';
+    titleText.textContent = 'IrishExit: Off';
 
-    const statsText = document.createElement('span');
-    statsText.style.color = '#cbd5e1';
-    statsText.style.marginLeft = '2px';
+    container.appendChild(iconSpan);
+    container.appendChild(statusDot);
+    container.appendChild(titleText);
 
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.style.marginLeft = '6px';
-    toggleBtn.style.padding = '3px 10px';
-    toggleBtn.style.borderRadius = '6px';
-    toggleBtn.style.border = '1px solid rgba(16, 185, 129, 0.5)';
-    toggleBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
-    toggleBtn.style.color = '#34d399';
-    toggleBtn.style.fontSize = '11px';
-    toggleBtn.style.fontWeight = '600';
-    toggleBtn.style.cursor = 'pointer';
-    toggleBtn.textContent = 'Turn ON for This Meet';
-    toggleBtn.addEventListener('click', () => {
+    // Floating Tooltip Dropdown
+    const tooltip = document.createElement('div');
+    tooltip.id = 'irishexit-hud-tooltip';
+    tooltip.style.position = 'absolute';
+    tooltip.style.top = '38px';
+    tooltip.style.right = '0';
+    tooltip.style.minWidth = '210px';
+    tooltip.style.padding = '10px 12px';
+    tooltip.style.borderRadius = '12px';
+    tooltip.style.backgroundColor = 'rgba(24, 26, 29, 0.96)';
+    tooltip.style.backdropFilter = 'blur(12px)';
+    tooltip.style.webkitBackdropFilter = 'blur(12px)';
+    tooltip.style.border = '1px solid rgba(255, 255, 255, 0.16)';
+    tooltip.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.55)';
+    tooltip.style.color = '#e8eaed';
+    tooltip.style.fontSize = '11px';
+    tooltip.style.lineHeight = '1.45';
+    tooltip.style.display = 'none';
+    tooltip.style.pointerEvents = 'auto';
+    tooltip.style.cursor = 'default';
+    tooltip.style.zIndex = '2147483647';
+    tooltip.style.textAlign = 'left';
+
+    const tooltipHeader = document.createElement('div');
+    tooltipHeader.style.fontWeight = '600';
+    tooltipHeader.style.marginBottom = '4px';
+    tooltipHeader.style.color = '#f8fafc';
+    tooltipHeader.textContent = 'IrishExit';
+
+    const tooltipStats = document.createElement('div');
+    tooltipStats.style.color = '#cbd5e1';
+    tooltipStats.style.marginBottom = '8px';
+
+    const tooltipActions = document.createElement('div');
+    tooltipActions.style.display = 'flex';
+    tooltipActions.style.justifyContent = 'space-between';
+    tooltipActions.style.alignItems = 'center';
+    tooltipActions.style.borderTop = '1px solid rgba(255, 255, 255, 0.1)';
+    tooltipActions.style.paddingTop = '6px';
+    tooltipActions.style.marginTop = '4px';
+
+    const resetPeakBtn = document.createElement('button');
+    resetPeakBtn.type = 'button';
+    resetPeakBtn.style.background = 'none';
+    resetPeakBtn.style.border = 'none';
+    resetPeakBtn.style.color = '#38bdf8';
+    resetPeakBtn.style.cursor = 'pointer';
+    resetPeakBtn.style.padding = '0';
+    resetPeakBtn.style.fontSize = '11px';
+    resetPeakBtn.style.textDecoration = 'underline';
+    resetPeakBtn.textContent = 'Reset Peak';
+    resetPeakBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resetPeakToCurrent();
+      renderHud();
+    });
+
+    const hintText = document.createElement('span');
+    hintText.style.color = '#94a3b8';
+    hintText.style.fontSize = '10px';
+    hintText.textContent = 'Click pill to toggle';
+
+    tooltipActions.appendChild(resetPeakBtn);
+    tooltipActions.appendChild(hintText);
+
+    tooltip.appendChild(tooltipHeader);
+    tooltip.appendChild(tooltipStats);
+    tooltip.appendChild(tooltipActions);
+    container.appendChild(tooltip);
+
+    // Hover interactions
+    let hoverTimeout = null;
+    container.addEventListener('mouseenter', () => {
+      clearTimeout(hoverTimeout);
+      tooltip.style.display = 'block';
+      if (!state.meetingEnabled) {
+        container.style.backgroundColor = 'rgba(60, 64, 67, 0.95)';
+        container.style.color = '#f8fafc';
+      }
+    });
+    container.addEventListener('mouseleave', () => {
+      hoverTimeout = setTimeout(() => {
+        tooltip.style.display = 'none';
+      }, 150);
+      if (!state.meetingEnabled) {
+        container.style.backgroundColor = 'rgba(32, 33, 36, 0.9)';
+        container.style.color = '#9aa0a6';
+      }
+    });
+
+    // 1-Click Toggle
+    container.addEventListener('click', (e) => {
+      if (tooltip.contains(e.target) && e.target !== tooltip) {
+        return;
+      }
+      container.style.transform = 'scale(0.96)';
+      setTimeout(() => {
+        container.style.transform = 'none';
+      }, 120);
       setMeetingEnabledState(!state.meetingEnabled);
     });
 
-    topRow.appendChild(statusDot);
-    topRow.appendChild(titleText);
-    topRow.appendChild(statsText);
-    topRow.appendChild(toggleBtn);
-    container.appendChild(topRow);
+    window.addEventListener('resize', () => {
+      if (hudElements && hudElements.container) {
+        updateHudPosition(hudElements.container);
+      }
+    });
 
     document.body.appendChild(container);
-    hudElements = { container, statusDot, titleText, statsText, toggleBtn };
+    hudElements = {
+      container,
+      statusDot,
+      titleText,
+      tooltip,
+      tooltipHeader,
+      tooltipStats,
+      resetPeakBtn
+    };
     return hudElements;
   }
 
   function renderHud() {
-    if (!document.body || !hudElements && !isCallUrl()) {
+    if (!document.body || (!hudElements && !isCallUrl())) {
       return;
     }
     const hud = createHudElements();
@@ -594,47 +752,64 @@
       return;
     }
 
-    hud.container.style.display = 'block';
+    hud.container.style.display = 'inline-flex';
+    updateHudPosition(hud.container);
+
     if (state.hasLeft) {
-      hud.statusDot.style.backgroundColor = '#ef4444';
-      hud.titleText.textContent = 'Leaving Call Now...';
-      hud.statsText.textContent = state.lastReason;
-      hud.toggleBtn.style.display = 'none';
+      hud.statusDot.style.backgroundColor = '#ea4335';
+      hud.statusDot.style.boxShadow = '0 0 6px rgba(234, 67, 53, 0.7)';
+      hud.container.style.backgroundColor = 'rgba(56, 18, 18, 0.95)';
+      hud.container.style.borderColor = 'rgba(234, 67, 53, 0.6)';
+      hud.container.style.color = '#f28b82';
+      hud.titleText.textContent = 'Leaving Call...';
+      hud.tooltipHeader.textContent = 'IrishExit: Disconnecting';
+      hud.tooltipStats.textContent = state.lastReason;
       return;
     }
 
-    hud.toggleBtn.style.display = 'inline-block';
     if (!state.meetingEnabled) {
-      hud.statusDot.style.backgroundColor = '#64748b';
-      hud.titleText.textContent = 'IrishExit: OFF';
-      hud.statsText.textContent = `Now: ${state.currentParticipants}`;
-      hud.toggleBtn.textContent = 'Turn ON for This Meet';
-      hud.toggleBtn.style.backgroundColor = 'rgba(16, 185, 129, 0.2)';
-      hud.toggleBtn.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-      hud.toggleBtn.style.color = '#34d399';
+      hud.statusDot.style.backgroundColor = '#9aa0a6';
+      hud.statusDot.style.boxShadow = 'none';
+      hud.container.style.backgroundColor = 'rgba(32, 33, 36, 0.9)';
+      hud.container.style.borderColor = 'rgba(255, 255, 255, 0.16)';
+      hud.container.style.color = '#9aa0a6';
+      hud.titleText.textContent = 'IrishExit: Off';
+      hud.tooltipHeader.textContent = 'IrishExit: OFF (Click to Arm)';
+      hud.tooltipStats.textContent = `Current participants: ${state.currentParticipants}. Click this pill to arm auto-leave for this call.`;
       return;
     }
-
-    hud.toggleBtn.textContent = 'Turn OFF';
-    hud.toggleBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-    hud.toggleBtn.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-    hud.toggleBtn.style.color = '#f8fafc';
 
     if (!state.armed) {
-      hud.statusDot.style.backgroundColor = '#f59e0b';
-      hud.titleText.textContent = `ON (Waiting for ≥${settings.minPeakToArm})`;
-      hud.statsText.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants}`;
+      hud.statusDot.style.backgroundColor = '#fbbc04';
+      hud.statusDot.style.boxShadow = '0 0 6px rgba(251, 188, 4, 0.5)';
+      hud.container.style.backgroundColor = 'rgba(40, 35, 20, 0.92)';
+      hud.container.style.borderColor = 'rgba(251, 188, 4, 0.45)';
+      hud.container.style.color = '#fde293';
+      hud.titleText.textContent = `Arming (≥${settings.minPeakToArm})`;
+      hud.tooltipHeader.textContent = 'IrishExit: ON (Waiting to Arm)';
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants}. Waiting for room to reach ≥${settings.minPeakToArm} participants before arming.`;
       return;
     }
 
     if (state.triggerStartTime !== null) {
-      hud.statusDot.style.backgroundColor = '#ef4444';
+      hud.statusDot.style.backgroundColor = '#ea4335';
+      hud.statusDot.style.boxShadow = '0 0 8px rgba(234, 67, 53, 0.8)';
+      hud.container.style.backgroundColor = 'rgba(56, 18, 18, 0.95)';
+      hud.container.style.borderColor = 'rgba(234, 67, 53, 0.7)';
+      hud.container.style.color = '#f28b82';
       hud.titleText.textContent = 'Drop Detected — Leaving!';
+      hud.tooltipHeader.textContent = 'IrishExit: Drop Threshold Reached';
+      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (trigger was ≤${state.leaveAtOrBelow}). Disconnecting...`;
     } else {
-      hud.statusDot.style.backgroundColor = '#10b981';
-      hud.titleText.textContent = 'IrishExit: ON';
+      hud.statusDot.style.backgroundColor = '#34a853';
+      hud.statusDot.style.boxShadow = '0 0 6px rgba(52, 168, 83, 0.6)';
+      hud.container.style.backgroundColor = 'rgba(18, 42, 28, 0.92)';
+      hud.container.style.borderColor = 'rgba(52, 168, 83, 0.45)';
+      hud.container.style.color = '#a8dab5';
+      hud.titleText.textContent = `Armed · Leaves ≤ ${state.leaveAtOrBelow}`;
+      hud.tooltipHeader.textContent = 'IrishExit: Armed & Watching';
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants} · Auto-leaves when room drops to ≤ ${state.leaveAtOrBelow}.`;
     }
-    hud.statsText.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants} · Leaves ≤${state.leaveAtOrBelow}`;
   }
 
   function renderAutoLeftBannerIfApplicable() {
@@ -830,10 +1005,8 @@
           }
 
           if (message.type === 'ALM_RESET_PEAK') {
-            state.peakParticipants = state.currentParticipants;
-            state.triggerStartTime = null;
-            evaluateCallState();
-            sendResponse({ ok: true, peakParticipants: state.peakParticipants });
+            const newPeak = resetPeakToCurrent();
+            sendResponse({ ok: true, peakParticipants: newPeak });
             return false;
           }
 
