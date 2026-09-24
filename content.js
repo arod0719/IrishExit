@@ -638,7 +638,7 @@
     let targetRight = 120;
 
     if (leftmostX < window.innerWidth && leftmostX >= minClusterX) {
-      targetRight = window.innerWidth - leftmostX + 8;
+      targetRight = window.innerWidth - leftmostX + 16;
       targetTop = Math.max(6, Math.round(matchingTop + (matchingHeight - 32) / 2));
     }
 
