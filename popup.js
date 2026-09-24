@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   showHud: true
 });
 
+const HELP_URL = 'https://github.com/arod0719/IrishExit/blob/main/HOW_IT_WORKS.md';
+
 function clampInt(value, min, max, fallback) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -49,6 +51,21 @@ function readSettingsFromForm() {
   };
 }
 
+function updateActivePresetHighlight() {
+  const s = readSettingsFromForm();
+  const fastBtn = document.getElementById('presetFast');
+  const balancedBtn = document.getElementById('presetBalanced');
+  const largeBtn = document.getElementById('presetLarge');
+
+  const isFast = s.useDropPercent && s.dropPercent === 20 && s.useMinFloor && s.minFloor === 3;
+  const isBalanced = s.useDropPercent && s.dropPercent === 30 && s.useMinFloor && s.minFloor === 2;
+  const isLarge = s.useDropPercent && s.dropPercent === 40 && s.useMinFloor && s.minFloor === 2;
+
+  if (fastBtn) fastBtn.classList.toggle('active', isFast);
+  if (balancedBtn) balancedBtn.classList.toggle('active', isBalanced);
+  if (largeBtn) largeBtn.classList.toggle('active', isLarge);
+}
+
 function writeSettingsToForm(cfg) {
   const s = Object.assign({}, DEFAULT_SETTINGS, cfg || {});
   document.getElementById('autoArmNewMeetings').checked = Boolean(s.autoArmNewMeetings);
@@ -61,6 +78,7 @@ function writeSettingsToForm(cfg) {
   document.getElementById('hardDisconnectFailsafe').checked = Boolean(s.hardDisconnectFailsafe);
   document.getElementById('closeTabOnLeave').checked = Boolean(s.closeTabOnLeave);
   document.getElementById('showHud').checked = Boolean(s.showHud);
+  updateActivePresetHighlight();
 }
 
 function saveSettings() {
@@ -100,7 +118,7 @@ function setMeetingEnabledOnActiveTab(enabled) {
     if (headerLogo) {
       headerLogo.src = enabled ? 'icons/icon-on-48.png' : 'icons/icon-off-48.png';
     }
-    headerSub.textContent = enabled ? 'ON for This Meeting' : 'OFF for This Meeting';
+    headerSub.textContent = enabled ? 'Active on This Call' : 'Turned OFF for This Call';
 
     // Store in chrome.storage.local for this meeting code
     const meetingCode = getMeetingCodeFromUrl(activeTab.url);
@@ -114,7 +132,6 @@ function setMeetingEnabledOnActiveTab(enabled) {
       { type: 'ALM_SET_MEETING_ENABLED', enabled: Boolean(enabled) },
       () => {
         if (chrome.runtime.lastError) {
-          // If script wasn't injected yet, inject it now
           chrome.scripting.executeScript(
             {
               target: { tabId: activeTab.id, allFrames: false },
@@ -165,7 +182,7 @@ function refreshActiveMeetTelemetry() {
       if (headerLogo) {
         headerLogo.src = 'icons/icon-off-48.png';
       }
-      headerSub.textContent = 'Join a Meet to Toggle ON';
+      headerSub.textContent = 'Join a call to start';
       if (testLeaveBtn) {
         testLeaveBtn.disabled = true;
         testLeaveBtn.style.opacity = '0.4';
@@ -184,7 +201,6 @@ function refreshActiveMeetTelemetry() {
 
     chrome.tabs.sendMessage(activeTab.id, { type: 'ALM_GET_STATUS' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.ok || !response.state) {
-        // Content script might not be injected in this tab yet; check stored meeting setting
         const meetingCode = getMeetingCodeFromUrl(activeTab.url);
         if (meetingCode) {
           chrome.storage.local.get([`alm_meet_${meetingCode}`], (stRes) => {
@@ -193,7 +209,7 @@ function refreshActiveMeetTelemetry() {
             if (headerLogo) {
               headerLogo.src = isSavedOn ? 'icons/icon-on-48.png' : 'icons/icon-off-48.png';
             }
-            headerSub.textContent = isSavedOn ? 'ON for This Meeting' : 'OFF for This Meeting';
+            headerSub.textContent = isSavedOn ? 'Active on This Call' : 'Turned OFF for This Call';
           });
         }
         badge.className = 'badge badge-waiting';
@@ -216,11 +232,11 @@ function refreshActiveMeetTelemetry() {
       if (headerLogo) {
         headerLogo.src = st.meetingEnabled ? 'icons/icon-on-48.png' : 'icons/icon-off-48.png';
       }
-      headerSub.textContent = st.meetingEnabled ? 'ON for This Meeting' : 'OFF for This Meeting';
+      headerSub.textContent = st.meetingEnabled ? 'Active on This Call' : 'Turned OFF for This Call';
 
       if (!st.inCall) {
         badge.className = 'badge badge-idle';
-        badge.textContent = st.meetingEnabled ? 'Pre-Armed in Lobby' : 'In Lobby (OFF)';
+        badge.textContent = st.meetingEnabled ? 'Armed for Call Entry' : 'In Lobby (OFF)';
         peakEl.textContent = '—';
         nowEl.textContent = '—';
         leaveAtEl.textContent = '—';
@@ -255,15 +271,15 @@ function refreshActiveMeetTelemetry() {
 
       if (!st.meetingEnabled) {
         badge.className = 'badge badge-idle';
-        badge.textContent = 'OFF for This Meeting';
+        badge.textContent = 'Turned OFF for This Call';
         leaveAtEl.textContent = 'OFF';
       } else if (st.armed) {
         badge.className = 'badge badge-armed';
-        badge.textContent = 'Armed & Watching';
+        badge.textContent = 'Active & Watching';
         leaveAtEl.textContent = `≤ ${st.leaveAtOrBelow}`;
       } else {
         badge.className = 'badge badge-waiting';
-        badge.textContent = 'ON · Waiting for Min Peak';
+        badge.textContent = `Waiting for Attendees (≥${st.minPeakToArm || 3})`;
         leaveAtEl.textContent = '—';
       }
     });
@@ -278,14 +294,12 @@ function executeDirectHangup(tabId, url) {
     {
       target: { tabId },
       func: () => {
-        // 1. Click Leave button
         const btn = document.querySelector(
           'button[aria-label*="Leave call" i], button[aria-label*="End call" i], button[jsname="CQylAd"]'
         );
         if (btn) {
           btn.click();
         }
-        // 2. Click Just leave if host dialog appears
         setTimeout(() => {
           const dialogBtns = document.querySelectorAll(
             '[role="dialog"] button, [aria-modal="true"] button, button'
@@ -298,7 +312,6 @@ function executeDirectHangup(tabId, url) {
             }
           }
         }, 200);
-        // 3. Failsafe redirect
         setTimeout(() => {
           window.location.replace('https://meet.google.com/?autoleft=1');
         }, 700);
@@ -314,6 +327,22 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['almSettings'], (res) => {
     writeSettingsToForm(res && res.almSettings);
   });
+
+  // Help button and footer link
+  const openHelp = () => {
+    chrome.tabs.create({ url: HELP_URL });
+  };
+  const helpBtn = document.getElementById('helpBtn');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', openHelp);
+  }
+  const helpFooterLink = document.getElementById('helpFooterLink');
+  if (helpFooterLink) {
+    helpFooterLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      openHelp();
+    });
+  }
 
   // Ensure content script is running in active tab immediately on popup open
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -359,7 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
   for (const id of settingIds) {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', saveSettings);
+      el.addEventListener('change', () => {
+        updateActivePresetHighlight();
+        saveSettings();
+      });
     }
   }
 

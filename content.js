@@ -615,7 +615,7 @@
     titleText.style.fontWeight = '500';
     titleText.style.letterSpacing = '0.01em';
     titleText.style.whiteSpace = 'nowrap';
-    titleText.textContent = 'IrishExit: Off';
+    titleText.textContent = 'IrishExit · Off';
 
     container.appendChild(iconSpan);
     container.appendChild(statusDot);
@@ -627,7 +627,7 @@
     tooltip.style.position = 'absolute';
     tooltip.style.top = '38px';
     tooltip.style.right = '0';
-    tooltip.style.minWidth = '210px';
+    tooltip.style.minWidth = '220px';
     tooltip.style.padding = '10px 12px';
     tooltip.style.borderRadius = '12px';
     tooltip.style.backgroundColor = 'rgba(24, 26, 29, 0.96)';
@@ -662,6 +662,11 @@
     tooltipActions.style.paddingTop = '6px';
     tooltipActions.style.marginTop = '4px';
 
+    const leftLinks = document.createElement('div');
+    leftLinks.style.display = 'flex';
+    leftLinks.style.alignItems = 'center';
+    leftLinks.style.gap = '8px';
+
     const resetPeakBtn = document.createElement('button');
     resetPeakBtn.type = 'button';
     resetPeakBtn.style.background = 'none';
@@ -678,12 +683,33 @@
       renderHud();
     });
 
+    const guideLink = document.createElement('a');
+    guideLink.href = 'https://github.com/arod0719/IrishExit/blob/main/HOW_IT_WORKS.md';
+    guideLink.target = '_blank';
+    guideLink.rel = 'noopener noreferrer';
+    guideLink.style.color = '#94a3b8';
+    guideLink.style.fontSize = '10px';
+    guideLink.style.textDecoration = 'none';
+    guideLink.textContent = '📖 Guide';
+    guideLink.addEventListener('mouseenter', () => {
+      guideLink.style.color = '#38bdf8';
+    });
+    guideLink.addEventListener('mouseleave', () => {
+      guideLink.style.color = '#94a3b8';
+    });
+    guideLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    leftLinks.appendChild(resetPeakBtn);
+    leftLinks.appendChild(guideLink);
+
     const hintText = document.createElement('span');
     hintText.style.color = '#94a3b8';
     hintText.style.fontSize = '10px';
     hintText.textContent = 'Click pill to toggle';
 
-    tooltipActions.appendChild(resetPeakBtn);
+    tooltipActions.appendChild(leftLinks);
     tooltipActions.appendChild(hintText);
 
     tooltip.appendChild(tooltipHeader);
@@ -762,7 +788,7 @@
       hud.container.style.borderColor = 'rgba(234, 67, 53, 0.6)';
       hud.container.style.color = '#f28b82';
       hud.titleText.textContent = 'Leaving Call...';
-      hud.tooltipHeader.textContent = 'IrishExit: Disconnecting';
+      hud.tooltipHeader.textContent = 'IrishExit · Disconnecting';
       hud.tooltipStats.textContent = state.lastReason;
       return;
     }
@@ -773,9 +799,9 @@
       hud.container.style.backgroundColor = 'rgba(32, 33, 36, 0.9)';
       hud.container.style.borderColor = 'rgba(255, 255, 255, 0.16)';
       hud.container.style.color = '#9aa0a6';
-      hud.titleText.textContent = 'IrishExit: Off';
-      hud.tooltipHeader.textContent = 'IrishExit: OFF (Click to Arm)';
-      hud.tooltipStats.textContent = `Current participants: ${state.currentParticipants}. Click this pill to arm auto-leave for this call.`;
+      hud.titleText.textContent = 'IrishExit · Off';
+      hud.tooltipHeader.textContent = 'IrishExit · Turned Off';
+      hud.tooltipStats.textContent = `Current attendees: ${state.currentParticipants}. Click this pill to activate auto-leave for this call.`;
       return;
     }
 
@@ -785,9 +811,9 @@
       hud.container.style.backgroundColor = 'rgba(40, 35, 20, 0.92)';
       hud.container.style.borderColor = 'rgba(251, 188, 4, 0.45)';
       hud.container.style.color = '#fde293';
-      hud.titleText.textContent = `Arming (≥${settings.minPeakToArm})`;
-      hud.tooltipHeader.textContent = 'IrishExit: ON (Waiting to Arm)';
-      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants}. Waiting for room to reach ≥${settings.minPeakToArm} participants before arming.`;
+      hud.titleText.textContent = `Waiting (need ≥${settings.minPeakToArm})`;
+      hud.tooltipHeader.textContent = 'IrishExit · Waiting for Room to Fill';
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants}. Waiting for room to reach ≥${settings.minPeakToArm} people before activating.`;
       return;
     }
 
@@ -798,17 +824,17 @@
       hud.container.style.borderColor = 'rgba(234, 67, 53, 0.7)';
       hud.container.style.color = '#f28b82';
       hud.titleText.textContent = 'Drop Detected — Leaving!';
-      hud.tooltipHeader.textContent = 'IrishExit: Drop Threshold Reached';
-      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (trigger was ≤${state.leaveAtOrBelow}). Disconnecting...`;
+      hud.tooltipHeader.textContent = 'IrishExit · Threshold Reached';
+      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (threshold was ≤${state.leaveAtOrBelow}). Disconnecting...`;
     } else {
       hud.statusDot.style.backgroundColor = '#34a853';
       hud.statusDot.style.boxShadow = '0 0 6px rgba(52, 168, 83, 0.6)';
       hud.container.style.backgroundColor = 'rgba(18, 42, 28, 0.92)';
       hud.container.style.borderColor = 'rgba(52, 168, 83, 0.45)';
       hud.container.style.color = '#a8dab5';
-      hud.titleText.textContent = `Armed · Leaves ≤ ${state.leaveAtOrBelow}`;
-      hud.tooltipHeader.textContent = 'IrishExit: Armed & Watching';
-      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Now: ${state.currentParticipants} · Auto-leaves when room drops to ≤ ${state.leaveAtOrBelow}.`;
+      hud.titleText.textContent = `Active · Leaves at ≤ ${state.leaveAtOrBelow}`;
+      hud.tooltipHeader.textContent = 'IrishExit · Active & Watching';
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants} · Auto-leaves when room drops to ≤ ${state.leaveAtOrBelow}.`;
     }
   }
 
