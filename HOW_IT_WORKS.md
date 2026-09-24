@@ -6,7 +6,9 @@
 
 ## 🎯 The Two Exit Rules
 
-IrishExit monitors the meeting attendance in real-time and disconnects your call when **either** of these two conditions is met:
+IrishExit monitors meeting attendance in real-time and disconnects your call when **either** of these two conditions is met:
+
+![Adaptive Scaling Infographic](store-assets/screenshot-3-adaptive-scaling.png)
 
 ### 1. Attendance Drop Threshold (Default: `30%` drop from peak)
 - IrishExit remembers the **highest number of people** present during your call (the "peak").
@@ -22,33 +24,37 @@ IrishExit monitors the meeting attendance in real-time and disconnects your call
 
 ---
 
-## ⏱️ Smart Activation Threshold (Default: `3 people`)
-
-* **What is it?** IrishExit waits until at least **3 people** have entered the meeting before it begins watching for drops.
-* **Why this matters:** When you join a meeting room early and only 1 or 2 people are there, you don't want the extension to trigger an immediate exit. IrishExit stays in a **"Waiting"** state until the call is in session.
-
----
-
 ## 🎛️ In-Call Top-Right Button
 
 While in any Google Meet call, IrishExit places a sleek, unobtrusive pill button in the **top-right header**, directly beside Google Meet's participant chip:
 
+![In-Call Google Meet Header Button](store-assets/screenshot-1-in-call.png)
+
 * **🍀 IrishExit · Off**: Click once to turn ON for this meeting.
-* **🍀 Waiting (need ≥3)**: The meeting has just started; waiting for attendees to join.
-* **🍀 Active · Leaves ≤ X**: Actively monitoring. Shows the exact attendee count that triggers an exit. Click once to turn OFF.
+* **🍀 Waiting (need ≥3)**: The meeting has just started; waiting for attendees to join before arming.
+* **🍀 Active · Leaves at ≤ X**: Actively monitoring. Shows the exact attendee count that triggers an exit. Click once to turn OFF.
 * **Hover Tooltip**: Hovering your cursor over the pill displays live stats (`Peak`, `Current`, `Threshold`) and a **Reset Peak** button.
 
 ---
 
-## ⚡ Exit Presets
+## ⚡ Exit Presets & Live Telemetry
 
 You can choose from three built-in presets in the extension popup:
+
+![IrishExit Popup & Live Telemetry](store-assets/screenshot-2-popup.png)
 
 | Preset | Drop Threshold | Safety Floor | Delay | Best Used For |
 | :--- | :---: | :---: | :---: | :--- |
 | **Quick Exit** | 20% drop | ≤ 3 people | 1 sec | Fast syncs where meetings end promptly |
 | **Balanced (Default)** | 30% drop | ≤ 2 people | 2 sec | Everyday team meetings & presentations |
 | **Patient** | 40% drop | ≤ 2 people | 2 sec | Large webinars or Q&A sessions with high attendee fluctuation |
+
+---
+
+## ⏱️ Smart Activation Threshold (Default: `3 people`)
+
+* **What is it?** IrishExit waits until at least **3 people** have entered the meeting before it begins watching for drops.
+* **Why this matters:** When you join a meeting room early and only 1 or 2 people are there, you don't want the extension to trigger an immediate exit. IrishExit stays in a **"Waiting"** state until the call is in session.
 
 ---
 
@@ -62,6 +68,8 @@ When the exit threshold is reached, IrishExit disconnects in three robust stages
 ---
 
 ## 🛡️ Privacy & Security
+
+![Preferences & Privacy](store-assets/screenshot-4-preferences.png)
 
 * **100% Local**: IrishExit runs entirely in your local browser sandbox.
 * **Zero Telemetry**: No external servers, no tracking, no analytics, no cookies collected.

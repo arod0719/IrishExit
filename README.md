@@ -1,53 +1,96 @@
+<div align="center">
+
+![IrishExit — Auto Leave for Google Meet](store-assets/marquee-promo-1400x560.png)
+
 # IrishExit — Auto Leave for Google Meet
 
-A modern Manifest V3 Chrome extension designed to slip you out of Google Meet calls smoothly when participant attendance drops—whether you are in a 5-person sync or a 100+ person all-hands. Never be the awkward last person left in an empty room.
+**Never be the awkward last person left lingering in an empty meeting.**
 
-📖 **[Read the Full User Guide & How It Works (HOW_IT_WORKS.md)](HOW_IT_WORKS.md)**
+[![Manifest V3](https://img.shields.io/badge/Manifest-V3-emerald?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
+[![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-blue?style=flat-square)](HOW_IT_WORKS.md#privacy--security)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
+
+📖 **[Read the Full User Guide & Documentation (HOW_IT_WORKS.md)](HOW_IT_WORKS.md)**
+
+</div>
 
 ---
 
-## 🍀 Features
+## 🍀 Why IrishExit?
+
+When big presentations, team retros, or all-hands finish, attendance collapses fast. If you're multitasking or taking notes, you frequently end up trapped in the meeting room alone with the host or presenter. 
+
+**IrishExit** solves this permanently. It intelligently monitors Google Meet attendance in real time and smoothly disconnects you when people start leaving.
+
+---
+
+## 📸 Extension Preview
+
+### 1. In-Call Header Integration
+Sits directly in Google Meet's top-right header with zero interference with Gemini prompts, chat questions, closed captions, or video tiles. Click once to toggle on/off.
+
+![In-Call Google Meet Header Button](store-assets/screenshot-1-in-call.png)
+
+---
+
+### 2. Live Telemetry & Instant Presets
+Open the extension popup anytime to see live participant metrics, peak attendance, and choose between one-click exit presets.
+
+![IrishExit Popup & Live Telemetry](store-assets/screenshot-2-popup.png)
+
+---
+
+### 3. Adaptive Scaling for Any Meeting Size
+Whether you are in a 5-person sync or a 120-person all-hands, percentage-based drop thresholds ensure you never leave prematurely due to normal mid-meeting turnover or browser refreshes.
+
+![Adaptive Scaling Infographic](store-assets/screenshot-3-adaptive-scaling.png)
+
+---
+
+### 4. Granular Preferences & Privacy-First Security
+Tune exit delays, configure safety net floors, and enable failsafe disconnects with 100% client-side privacy.
+
+![Preferences & Privacy](store-assets/screenshot-4-preferences.png)
+
+---
+
+## ✨ Core Features
 
 - **Per-Meeting Opt-In (OFF by Default)**:
-  - Every meeting defaults to **OFF** so IrishExit never interrupts calls you want to stay in until the very end.
-  - Activate IrishExit with a single click using the in-call button in the top-right header of Google Meet or via the toolbar popup.
-  - *(Optional)* Check **"Auto-turn ON for every new call"** if you prefer it active automatically on every call.
-- **Adaptive Scaling (5–10 Person Syncs up to 100+ Person All-Hands)**:
-  - **Drop % from Peak** (default `30%`):
-    - Uses `max(2, round(peak * dropPercent%))` people leaving from peak attendance.
-    - **5-person call (`peak = 5`)**: requires at least **2 people** to leave (`leaves at ≤ 3`), preventing accidental disconnects when one person refreshes.
-    - **10-person call (`peak = 10`)**: requires **3 people** to leave (`leaves at ≤ 7`).
-    - **120-person all-hands (`peak = 120`)**: requires **36 people** (`30%`) to leave (`leaves at ≤ 84`), naturally absorbing mid-meeting turnover without kicking you out prematurely.
-  - **Safety Net Floor** (default `≤ 2` participants left):
-    - Acts as a hard safety net so you are never left 1-on-1 with the presenter or host.
-- **Dynamic Clover Status Icon**:
-  - **Neon Emerald Clover**: Armed and actively watching your meeting.
-  - **Dimmed Slate Monochrome Clover**: Idle or turned off for the current call.
-  - Toolbar badge shows live participant count or `OFF`.
-- **Exit Presets**:
-  - **Quick Exit**: `-20%` drop / `≤ 3` floor (fast response, 1s delay).
-  - **Balanced**: `-30%` drop / `≤ 2` floor (default, ideal for most meetings).
-  - **Patient**: `-40%` drop / `≤ 2` floor (extra leeway for large presentations).
+  - Defaults to **OFF** so IrishExit never interrupts calls you want to stay in until the very end.
+  - Arm with a single click using the in-call button in Meet's top-right header or the extension popup.
+- **Dual-Trigger Protection**:
+  - **Drop % from Peak** (default `30%`): Absorbs normal audience fluctuations while detecting mass departures.
+  - **Safety Net Floor** (default `≤ 2` people): Guarantees you never get trapped 1-on-1 with the presenter.
+- **Smart Activation Threshold (≥ 3 people)**:
+  - Waits until meeting attendees actually arrive before arming, so joining an empty room early won't trigger an exit.
 - **3-Layer Guaranteed Hangup**:
   1. Triggers Google Meet's official **Leave call** button.
-  2. Auto-clicks **"Just leave the call"** if the host/moderator confirmation dialog appears.
-  3. **Hard WebRTC Disconnect Failsafe**: Disconnects camera and microphone by redirecting to `https://meet.google.com/?autoleft=1` (or closes the tab if configured).
+  2. Bypasses host confirmation dialogs (*"Just leave the call"*).
+  3. **Hard WebRTC Disconnect**: Disconnects microphone and camera instantly by navigating to the end screen.
 
 ---
 
 ## 🛠️ Local Installation (Load Unpacked)
 
-1. Open Chrome and go to `chrome://extensions/`.
-2. Enable **Developer mode** (toggle in the top-right corner).
-3. Click **Load unpacked** (top-left button).
-4. Select the `irishexit` folder.
-5. Join any Google Meet call and toggle **Turn ON for This Meet** whenever you want IrishExit armed.
+1. Clone or download this repository.
+2. Open Chrome and navigate to `chrome://extensions/`.
+3. Enable **Developer mode** (toggle in the top-right corner).
+4. Click **Load unpacked** (top-left button) and select the `irishexit` folder.
+5. Join any Google Meet call and click the clover pill in the top-right header to activate!
 
 ---
 
 ## 🔒 Privacy & Permissions
 
-IrishExit runs 100% locally on your machine:
-- **Zero data collection**: No telemetry, analytics, or remote tracking.
-- **Strictly scoped permissions**: Only interacts with `https://meet.google.com/*`.
-- **No audio/video capture**: IrishExit only inspects the attendee counter element to know when meetings end.
+IrishExit is designed with a strict zero-data policy:
+- **100% Local**: Runs entirely in your browser sandbox.
+- **Zero Telemetry**: No external servers, no tracking, no analytics, no third-party scripts.
+- **Scoped Host Permissions**: Only activates on `https://meet.google.com/*`.
+- **No Media Recording**: Only reads the participant counter element—never captures audio, video, or chat.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
