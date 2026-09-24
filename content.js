@@ -524,38 +524,147 @@
     let targetTop = 10;
     let targetRight = 120;
 
-    // Scan for Google Meet's top-right header controls (participant chip, Gemini button, etc.)
-    const topButtons = [];
-    const candidates = document.querySelectorAll('button, [role="button"], [data-panel-id="1"]');
-    for (const el of candidates) {
+    // Collect all candidate elements in the top header band
+    // (buttons, chips, status pills, participant badge, presenter pill, etc.)
+    const candidateSelector = [
+      'button',
+      '[role="button"]',
+      '[role="status"]',
+      '[role="region"]',
+      '[data-panel-id]',
+      '[data-participant-id]',
+      '[data-tooltip]',
+      '.uGOf1d',
+      'img',
+      'div[aria-label]',
+      'span[aria-label]'
+    ].join(', ');
+
+    const rawCandidates = document.querySelectorAll(candidateSelector);
+    const validHeaderRects = [];
+
+    for (const el of rawCandidates) {
       if (el === container || container.contains(el)) continue;
       const rect = el.getBoundingClientRect();
+      // Must be within top header zone, visible, and not full-screen/backdrop
       if (
         rect.top >= 0 &&
         rect.top < 65 &&
-        rect.right > window.innerWidth - 350 &&
+        rect.bottom > 8 &&
+        rect.bottom <= 80 &&
+        rect.height >= 16 &&
+        rect.height <= 64 &&
         rect.width >= 16 &&
-        rect.height >= 16
+        rect.width < window.innerWidth * 0.85 &&
+        rect.right > 40
       ) {
-        topButtons.push(rect);
+        validHeaderRects.push(rect);
       }
     }
 
-    if (topButtons.length > 0) {
-      let minLeft = Infinity;
-      let matchingTop = 10;
-      let matchingHeight = 36;
-      for (const r of topButtons) {
-        if (r.left < minLeft && r.left > 80) {
-          minLeft = r.left;
-          matchingTop = r.top;
-          matchingHeight = r.height;
+    // Also specifically scan for any presenter indicators in the header
+    // Google Meet displays: "[Avatar] <Name> (Presenting)" or "You are presenting"
+    const textNodes = document.querySelectorAll('div, span');
+    for (const el of textNodes) {
+      if (el === container || container.contains(el)) continue;
+      if (el.children.length === 0 && el.textContent) {
+        const txt = el.textContent.trim().toLowerCase();
+        if (
+          txt.includes('(present') ||
+          txt === 'presentation' ||
+          txt.includes('presenting') ||
+          txt.includes('is presenting')
+        ) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top >= 0 && rect.top < 65 && rect.width > 0 && rect.height > 0) {
+            // Find outer pill/chip container
+            let pill = el;
+            while (pill.parentElement && pill.parentElement !== document.body) {
+              const pr = pill.parentElement.getBoundingClientRect();
+              if (pr.height <= 64 && pr.top >= 0 && pr.top < 65 && pr.width < window.innerWidth * 0.85) {
+                pill = pill.parentElement;
+              } else {
+                break;
+              }
+            }
+            const pillRect = pill.getBoundingClientRect();
+            if (pillRect.width >= 20 && pillRect.height >= 16) {
+              validHeaderRects.push(pillRect);
+            }
+          }
         }
       }
-      if (minLeft < window.innerWidth && minLeft > 80) {
-        targetRight = window.innerWidth - minLeft + 8;
+    }
+
+    // Also check for the parent flex cluster of top-right controls
+    const knownTopAnchors = [
+      document.querySelector('[data-panel-id="1"]'),
+      document.querySelector('.uGOf1d'),
+      document.querySelector('button[aria-label*="People" i]'),
+      document.querySelector('button[aria-label*="everyone" i]'),
+      document.querySelector('button[aria-label*="Gemini" i]')
+    ].filter(Boolean);
+
+    for (const anchor of knownTopAnchors) {
+      let curr = anchor.parentElement;
+      while (curr && curr !== document.body && curr !== document.documentElement) {
+        const r = curr.getBoundingClientRect();
+        if (
+          r.top >= 0 &&
+          r.top < 65 &&
+          r.height >= 24 &&
+          r.height <= 70 &&
+          r.width > 50 &&
+          r.width < window.innerWidth * 0.9 &&
+          r.right > window.innerWidth - 200
+        ) {
+          validHeaderRects.push(r);
+          for (const child of curr.children) {
+            if (child === container || container.contains(child)) continue;
+            const cr = child.getBoundingClientRect();
+            if (cr.width > 10 && cr.height > 10 && cr.top < 65) {
+              validHeaderRects.push(cr);
+            }
+          }
+          break;
+        }
+        curr = curr.parentElement;
+      }
+    }
+
+    if (validHeaderRects.length > 0) {
+      // Sort rects from right to left (descending order of right coordinate)
+      validHeaderRects.sort((a, b) => b.right - a.right);
+
+      // Start the cluster from the rightmost element near the right window edge
+      let clusterMinLeft = validHeaderRects[0].left;
+      let matchingTop = validHeaderRects[0].top;
+      let matchingHeight = validHeaderRects[0].height;
+
+      for (let i = 0; i < validHeaderRects.length; i++) {
+        const r = validHeaderRects[i];
+        // If element is overlapping or adjacent (gap <= 48px), it's part of the top-right cluster
+        const gap = clusterMinLeft - r.right;
+        if (gap <= 48) {
+          if (r.left < clusterMinLeft) {
+            clusterMinLeft = r.left;
+          }
+          matchingTop = Math.min(matchingTop, r.top);
+          matchingHeight = Math.max(matchingHeight, r.height);
+        }
+      }
+
+      if (clusterMinLeft < window.innerWidth && clusterMinLeft > 40) {
+        targetRight = window.innerWidth - clusterMinLeft + 8;
         targetTop = Math.max(6, Math.round(matchingTop + (matchingHeight - 32) / 2));
       }
+    }
+
+    // Safety guard: ensure the pill doesn't clip off the left side of the screen on narrow displays
+    const hudEstimatedWidth = 145;
+    const maxTargetRight = window.innerWidth - hudEstimatedWidth - 12;
+    if (targetRight > maxTargetRight) {
+      targetRight = Math.max(12, maxTargetRight);
     }
 
     container.style.top = `${targetTop}px`;
@@ -593,7 +702,7 @@
     container.style.gap = '6px';
     container.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.35)';
     container.style.transition =
-      'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease';
+      'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, right 0.25s cubic-bezier(0.2, 0, 0, 1), top 0.2s ease';
 
     const iconSpan = document.createElement('span');
     iconSpan.style.display = 'inline-flex';
