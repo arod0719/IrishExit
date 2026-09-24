@@ -7,10 +7,10 @@
 **Never be the awkward last person left lingering in an empty meeting.**
 
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-emerald?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
-[![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-blue?style=flat-square)](HOW_IT_WORKS.md#privacy--security)
+[![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-blue?style=flat-square)](PRIVACY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
-📖 **[Read the Full User Guide & Documentation (HOW_IT_WORKS.md)](HOW_IT_WORKS.md)**
+📖 **[Full Documentation](HOW_IT_WORKS.md)** • 🔒 **[Privacy Policy](PRIVACY.md)**
 
 </div>
 

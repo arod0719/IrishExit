@@ -74,6 +74,7 @@ When the exit threshold is reached, IrishExit disconnects in three robust stages
 * **100% Local**: IrishExit runs entirely in your local browser sandbox.
 * **Zero Telemetry**: No external servers, no tracking, no analytics, no cookies collected.
 * **No Recording**: IrishExit only reads the participant count displayed on your screen. It never captures, records, or transmits audio or video.
+* **Full Privacy Policy**: Read our complete, legally binding [Privacy Policy (PRIVACY.md)](PRIVACY.md).
 
 ---
 
