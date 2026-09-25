@@ -60,7 +60,7 @@ Tune exit delays, configure safety net floors, and enable failsafe disconnects w
   - Defaults to **OFF** so IrishExit never interrupts calls you want to stay in until the very end.
   - Arm with a single click using the in-call button in Meet's top-right header or the extension popup.
 - **Dual-Trigger Protection**:
-  - **Drop % from Peak** (default `30%`): Absorbs normal audience fluctuations while detecting mass departures.
+  - **Drop % from Peak** (default `40%`): Absorbs normal audience fluctuations while detecting mass departures.
   - **Safety Net Floor** (default `≤ 2` people): Guarantees you never get trapped 1-on-1 with the presenter.
 - **Smart Activation Threshold (≥ 3 people)**:
   - Waits until meeting attendees actually arrive before arming, so joining an empty room early won't trigger an exit.

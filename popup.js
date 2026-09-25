@@ -3,7 +3,7 @@
 const DEFAULT_SETTINGS = Object.freeze({
   autoArmNewMeetings: false,
   useDropPercent: true,
-  dropPercent: 30,
+  dropPercent: 40,
   useMinFloor: true,
   minFloor: 2,
   minPeakToArm: 3,
@@ -57,9 +57,9 @@ function updateActivePresetHighlight() {
   const balancedBtn = document.getElementById('presetBalanced');
   const largeBtn = document.getElementById('presetLarge');
 
-  const isFast = s.useDropPercent && s.dropPercent === 20 && s.useMinFloor && s.minFloor === 3;
-  const isBalanced = s.useDropPercent && s.dropPercent === 30 && s.useMinFloor && s.minFloor === 2;
-  const isLarge = s.useDropPercent && s.dropPercent === 40 && s.useMinFloor && s.minFloor === 2;
+  const isFast = s.useDropPercent && s.dropPercent === 30 && s.useMinFloor && s.minFloor === 3;
+  const isBalanced = s.useDropPercent && s.dropPercent === 40 && s.useMinFloor && s.minFloor === 2;
+  const isLarge = s.useDropPercent && s.dropPercent === 50 && s.useMinFloor && s.minFloor === 2;
 
   if (fastBtn) fastBtn.classList.toggle('active', isFast);
   if (balancedBtn) balancedBtn.classList.toggle('active', isBalanced);
@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('presetFast').addEventListener('click', () => {
     applyPreset({
       useDropPercent: true,
-      dropPercent: 20,
+      dropPercent: 30,
       useMinFloor: true,
       minFloor: 3,
       sustainedSeconds: 1
@@ -408,7 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('presetBalanced').addEventListener('click', () => {
     applyPreset({
       useDropPercent: true,
-      dropPercent: 30,
+      dropPercent: 40,
       useMinFloor: true,
       minFloor: 2,
       sustainedSeconds: 2
@@ -418,7 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('presetLarge').addEventListener('click', () => {
     applyPreset({
       useDropPercent: true,
-      dropPercent: 40,
+      dropPercent: 50,
       useMinFloor: true,
       minFloor: 2,
       sustainedSeconds: 2

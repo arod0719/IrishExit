@@ -10,13 +10,13 @@ IrishExit monitors meeting attendance in real-time and disconnects your call whe
 
 ![Adaptive Scaling Infographic](store-assets/screenshot-3-adaptive-scaling.png)
 
-### 1. Attendance Drop Threshold (Default: `30%` drop from peak)
+### 1. Attendance Drop Threshold (Default: `40%` drop from peak)
 - IrishExit remembers the **highest number of people** present during your call (the "peak").
-- If attendance drops by your configured percentage (e.g. 30%), IrishExit smoothly leaves.
+- If attendance drops by your configured percentage (e.g. 40%), IrishExit smoothly leaves.
 - **Adaptive scaling examples:**
   - **Small 5-person meeting (`peak = 5`)**: Requires at least **2 people** to leave (`exits at ≤ 3`), preventing accidental disconnects if a single person refreshes their browser.
-  - **10-person sync (`peak = 10`)**: Exits when attendance drops to **`≤ 7`**.
-  - **120-person all-hands (`peak = 120`)**: Requires **36 people** (`30%`) to leave (`exits at ≤ 84`), naturally absorbing mid-meeting churn without kicking you out early.
+  - **10-person sync (`peak = 10`)**: Exits when attendance drops to **`≤ 6`**.
+  - **120-person all-hands (`peak = 120`)**: Requires **48 people** (`40%`) to leave (`exits at ≤ 72`), naturally absorbing mid-meeting churn without kicking you out early.
 
 ### 2. Safety Net Floor (Default: `≤ 2` people left)
 - Acts as an absolute safety net regardless of percentage.
@@ -45,9 +45,9 @@ You can choose from three built-in presets in the extension popup:
 
 | Preset | Drop Threshold | Safety Floor | Delay | Best Used For |
 | :--- | :---: | :---: | :---: | :--- |
-| **Quick Exit** | 20% drop | ≤ 3 people | 1 sec | Fast syncs where meetings end promptly |
-| **Balanced (Default)** | 30% drop | ≤ 2 people | 2 sec | Everyday team meetings & presentations |
-| **Patient** | 40% drop | ≤ 2 people | 2 sec | Large webinars or Q&A sessions with high attendee fluctuation |
+| **Quick Exit** | 30% drop | ≤ 3 people | 1 sec | Fast syncs where meetings end promptly |
+| **Balanced (Default)** | 40% drop | ≤ 2 people | 2 sec | Everyday team meetings & presentations |
+| **Patient** | 50% drop | ≤ 2 people | 2 sec | Large webinars or Q&A sessions with high attendee fluctuation |
 
 ---
 

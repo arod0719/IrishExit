@@ -43,11 +43,11 @@
           <span class="metric-val" id="peakVal">—</span>
         </div>
         <div class="metric-box">
-          <span class="metric-label">Current Now</span>
+          <span class="metric-label">Current Attendees</span>
           <span class="metric-val" id="nowVal">—</span>
         </div>
         <div class="metric-box highlight">
-          <span class="metric-label">Leaves When ≤</span>
+          <span class="metric-label">Leaves When</span>
           <span class="metric-val" id="leaveAtVal">—</span>
         </div>
       </div>
@@ -61,15 +61,15 @@
       <div class="preset-buttons">
         <button type="button" class="btn-preset" id="presetFast">
           <span class="preset-name">Quick Exit</span>
-          <span class="preset-desc">-20% drop · ≤3 floor</span>
+          <span class="preset-desc">-30% drop · ≤3 floor</span>
         </button>
         <button type="button" class="btn-preset active" id="presetBalanced">
           <span class="preset-name">Balanced</span>
-          <span class="preset-desc">-30% drop · ≤2 floor</span>
+          <span class="preset-desc">-40% drop · ≤2 floor</span>
         </button>
         <button type="button" class="btn-preset" id="presetLarge">
           <span class="preset-name">Patient</span>
-          <span class="preset-desc">-40% drop · ≤2 floor</span>
+          <span class="preset-desc">-50% drop · ≤2 floor</span>
         </button>
       </div>
     </section>
@@ -89,7 +89,7 @@
             <span class="rule-title">Percentage drop from peak</span>
           </label>
           <div class="input-group">
-            <input type="number" id="dropPercent" min="10" max="90" step="5" value="30">
+            <input type="number" id="dropPercent" min="10" max="90" step="5" value="40">
             <span class="unit">%</span>
           </div>
         </div>

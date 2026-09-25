@@ -108,7 +108,7 @@
   const DEFAULT_SETTINGS = Object.freeze({
     autoArmNewMeetings: false,
     useDropPercent: true,
-    dropPercent: 30,
+    dropPercent: 40,
     useMinFloor: true,
     minFloor: 2,
     minPeakToArm: 3,
