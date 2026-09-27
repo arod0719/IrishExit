@@ -6,6 +6,19 @@
 
 **Never be the awkward last person left lingering in an empty meeting.**
 
+<br />
+
+<a href="https://chromewebstore.google.com/detail/cfkfbehnpkoonnolknibpicghbigbgnb?utm_source=item-share-cb">
+  <img src="https://img.shields.io/badge/Chrome_Web_Store-Available_Now-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" height="42" alt="Install from Chrome Web Store" />
+</a>
+
+<br />
+<br />
+
+👉 **[Click Here to Install from the Chrome Web Store](https://chromewebstore.google.com/detail/cfkfbehnpkoonnolknibpicghbigbgnb?utm_source=item-share-cb)** 👈
+
+<br />
+
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-emerald?style=flat-square)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-blue?style=flat-square)](PRIVACY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
@@ -71,7 +84,21 @@ Tune exit delays, configure safety net floors, and enable failsafe disconnects w
 
 ---
 
-## 🛠️ Local Installation (Load Unpacked)
+## 📥 Installation
+
+### Option 1: Chrome Web Store (Recommended)
+
+Install IrishExit directly to Chrome with automatic updates:
+
+<a href="https://chromewebstore.google.com/detail/cfkfbehnpkoonnolknibpicghbigbgnb?utm_source=item-share-cb">
+  <img src="https://img.shields.io/badge/Chrome_Web_Store-Add_to_Chrome-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" height="38" alt="Add to Chrome" />
+</a>
+
+🚀 **[Download IrishExit from the Chrome Web Store](https://chromewebstore.google.com/detail/cfkfbehnpkoonnolknibpicghbigbgnb?utm_source=item-share-cb)**
+
+---
+
+### Option 2: Local Installation (Load Unpacked)
 
 1. Clone or download this repository.
 2. Open Chrome and navigate to `chrome://extensions/`.
