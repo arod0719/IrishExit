@@ -125,6 +125,7 @@
     currentParticipants: 0,
     peakParticipants: 0,
     armed: false,
+    floorTriggered: false,
     leaveAtOrBelow: 0,
     triggerStartTime: null,
     hasLeft: false,
@@ -297,6 +298,48 @@
     return uniqueIds.size;
   }
 
+  function isPresentationActive() {
+    // 1. Direct presentation tile or video container
+    const presTile = document.querySelector(
+      '[data-is-presentation="true"], [data-presentation-id], div[data-requested-participant-id*="presentation"]'
+    );
+    if (presTile && presTile.offsetParent !== null) {
+      return true;
+    }
+
+    // 2. Video elements inside presentation container
+    const videos = document.querySelectorAll('video');
+    for (const v of videos) {
+      const container = v.closest('[data-is-presentation], [data-presentation-id], [aria-label*="presentation" i]');
+      if (container && container.offsetParent !== null) {
+        return true;
+      }
+    }
+
+    // 3. User presenting indicator (local user sharing screen)
+    const localPresenting = document.querySelector(
+      'button[aria-label*="Stop presenting" i], [aria-label*="You are presenting" i], [aria-label*="You\'re presenting" i]'
+    );
+    if (localPresenting && localPresenting.offsetParent !== null) {
+      return true;
+    }
+
+    // 4. Remote presenter badge in peninsula or header
+    const presenterLabels = document.querySelectorAll(
+      '[data-tooltip*="present" i], [aria-label*="presenting" i], [aria-label*="presentation" i]'
+    );
+    for (const el of presenterLabels) {
+      if (el.offsetParent !== null) {
+        const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '')).toLowerCase();
+        if (text.includes('presenting') || text.includes('presentation')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   function detectParticipantCount() {
     // 1. Canonical People panel button (SidePanelId.PEOPLE = 1) in bottom bar
     const canonicalPeopleBtns = document.querySelectorAll(
@@ -397,17 +440,22 @@
       return visibleTiles;
     }
 
-    // 8. If visibleTiles === 1, only confirm 1 if explicitly verified (lonely indicator or "just you")
-    if (visibleTiles === 1) {
-      const isExplicitlyAlone = document.querySelector(
-        '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="People - 1 joined" i]'
-      );
-      if (isExplicitlyAlone || state.peakParticipants <= 1) {
-        return 1;
-      }
+    // 8. If visibleTiles <= 1 (including 0 when self-view is minimized or hidden) and NO overflow bubble:
+    const presActive = isPresentationActive();
+    if (!presActive) {
+      // With no presentation and no overflow bubble, <= 1 tile unambiguously indicates the user is alone in the call.
+      return 1;
     }
 
-    // Indeterminate - telemetry temporarily unavailable (NEVER return 1 by default!)
+    // Presentation is active: participant tiles might be collapsed or hidden into a filmstrip.
+    const isExplicitlyAlone = document.querySelector(
+      '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="People - 1 joined" i]'
+    );
+    if (isExplicitlyAlone || state.peakParticipants <= 1) {
+      return 1;
+    }
+
+    // Indeterminate - telemetry temporarily unavailable during active presentation
     return null;
   }
 
@@ -554,6 +602,7 @@
         state.currentParticipants = 0;
         state.peakParticipants = 0;
         state.armed = false;
+        state.floorTriggered = false;
         state.leaveAtOrBelow = 0;
         state.triggerStartTime = null;
         state.hasLeft = false;
@@ -584,6 +633,7 @@
       const hangupBtn = findHangupButton();
       if (!hangupBtn) {
         state.inCall = false;
+        state.floorTriggered = false;
         state.triggerStartTime = null;
         safeSendMessage({
           type: 'ALM_UPDATE_BADGE',
@@ -599,31 +649,81 @@
 
       const detectedCount = detectParticipantCount();
       if (detectedCount === null) {
-        // Telemetry temporarily unavailable (e.g. layout transition, full-screen presentation).
-        // Crucial safety guard: Never allow a leave trigger countdown to advance while telemetry is indeterminate!
-        state.triggerStartTime = null;
-        renderHud();
-        return;
-      }
-
-      state.currentParticipants = detectedCount;
-      if (detectedCount > state.peakParticipants) {
-        state.peakParticipants = detectedCount;
+        // Telemetry temporarily unavailable (e.g. layout transition, participant departure animation).
+        // Crucial safety guard: If leave countdown or floor trigger is already locked in, DO NOT abort!
+        if (state.armed && !state.hasLeft && (state.floorTriggered || state.triggerStartTime !== null)) {
+          // Continue countdown execution below with previous known state
+        } else {
+          renderHud();
+          return;
+        }
+      } else {
+        state.currentParticipants = detectedCount;
+        if (detectedCount > state.peakParticipants) {
+          state.peakParticipants = detectedCount;
+        }
       }
 
       const details = computeThresholdDetails(state.peakParticipants, settings);
       state.armed = state.meetingEnabled && details.qualifiesToArm;
       state.leaveAtOrBelow = details.leaveAtOrBelow;
 
-      const badgeColor = !state.meetingEnabled ? '#64748b' : state.armed ? '#10b981' : '#f59e0b';
+      // Check if attendance is at or below the leave threshold or safety floor
+      const isAtSafetyFloor =
+        state.armed &&
+        settings.useMinFloor &&
+        state.currentParticipants <= settings.minFloor;
+
+      const isBelowThreshold =
+        state.armed &&
+        state.currentParticipants <= state.leaveAtOrBelow;
+
+      // Latch floor/threshold trigger: once triggered, lock it in so departures never get stuck
+      if (isAtSafetyFloor || isBelowThreshold) {
+        state.floorTriggered = true;
+      }
+
+      // Check if attendance recovered above leave threshold and above safety floor
+      if (
+        detectedCount !== null &&
+        detectedCount > state.leaveAtOrBelow &&
+        (!settings.useMinFloor || detectedCount > settings.minFloor)
+      ) {
+        state.floorTriggered = false;
+        state.triggerStartTime = null;
+      }
+
+      let badgeColor = '#64748b';
+      let badgeText = 'OFF';
+      if (state.meetingEnabled) {
+        if (state.hasLeft) {
+          badgeColor = '#ea4335';
+          badgeText = 'LEFT';
+        } else if (state.floorTriggered || state.triggerStartTime !== null) {
+          badgeColor = '#ea4335';
+          badgeText = 'EXIT';
+        } else if (state.armed) {
+          badgeColor = '#10b981';
+          badgeText = String(state.currentParticipants);
+        } else {
+          badgeColor = '#f59e0b';
+          badgeText = String(state.currentParticipants);
+        }
+      }
+
       safeSendMessage({
         type: 'ALM_UPDATE_BADGE',
-        text: state.meetingEnabled ? String(state.currentParticipants) : 'OFF',
+        text: badgeText,
         color: badgeColor,
         enabled: Boolean(state.meetingEnabled)
       });
 
-      if (state.armed && !state.hasLeft && state.currentParticipants <= state.leaveAtOrBelow) {
+      const shouldTriggerLeave =
+        state.armed &&
+        !state.hasLeft &&
+        (state.floorTriggered || state.currentParticipants <= state.leaveAtOrBelow);
+
+      if (shouldTriggerLeave) {
         const now = Date.now();
         if (state.triggerStartTime === null) {
           state.triggerStartTime = now;
@@ -639,7 +739,12 @@
         if (elapsedSec >= requiredSustainedSec) {
           // Double-check one final time right before executing leave
           const finalCheck = detectParticipantCount();
-          if (finalCheck !== null && finalCheck > state.leaveAtOrBelow) {
+          if (
+            finalCheck !== null &&
+            finalCheck > state.leaveAtOrBelow &&
+            (!settings.useMinFloor || finalCheck > settings.minFloor)
+          ) {
+            state.floorTriggered = false;
             state.triggerStartTime = null;
             state.currentParticipants = finalCheck;
             renderHud();
@@ -647,8 +752,9 @@
           }
 
           const reasonStr =
-            details.reasons.join(' | ') ||
-            `Participants dropped from ${state.peakParticipants} to ${state.currentParticipants}`;
+            state.floorTriggered && settings.useMinFloor && state.currentParticipants <= settings.minFloor
+              ? `Room reached safety floor (${state.currentParticipants} ≤ ${settings.minFloor}) from peak of ${state.peakParticipants}`
+              : (details.reasons.join(' | ') || `Participants dropped from ${state.peakParticipants} to ${state.currentParticipants}`);
           executeLeave(reasonStr);
           return;
         }
@@ -671,6 +777,10 @@
     if (state.meetingEnabled) {
       state.peakParticipants = Math.max(state.currentParticipants, 1);
       state.triggerStartTime = null;
+      state.floorTriggered = false;
+    } else {
+      state.floorTriggered = false;
+      state.triggerStartTime = null;
     }
     const meetingCode = getMeetingCodeFromUrl();
     if (meetingCode && isContextValid()) {
@@ -686,6 +796,7 @@
 
   function resetPeakToCurrent() {
     state.peakParticipants = state.currentParticipants;
+    state.floorTriggered = false;
     state.triggerStartTime = null;
     evaluateCallState();
     return state.peakParticipants;
@@ -1079,14 +1190,24 @@
     }
 
     if (state.triggerStartTime !== null) {
+      const requiredSustainedSec =
+        state.peakParticipants >= 4 && state.currentParticipants <= 2
+          ? Math.max(settings.sustainedSeconds, 3)
+          : settings.sustainedSeconds;
+      const elapsedSec = (Date.now() - state.triggerStartTime) / 1000;
+      const remainingSec = Math.max(0, Math.ceil(requiredSustainedSec - elapsedSec));
+
       hud.statusDot.style.backgroundColor = '#ea4335';
       hud.statusDot.style.boxShadow = '0 0 8px rgba(234, 67, 53, 0.8)';
       hud.container.style.backgroundColor = 'rgba(56, 18, 18, 0.95)';
       hud.container.style.borderColor = 'rgba(234, 67, 53, 0.7)';
       hud.container.style.color = '#f28b82';
-      hud.titleText.textContent = 'Drop Detected — Leaving!';
-      hud.tooltipHeader.textContent = 'IrishExit · Threshold Reached';
-      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (threshold was ≤${state.leaveAtOrBelow}). Disconnecting...`;
+      hud.titleText.textContent = `Leaving in ${remainingSec}s...`;
+      hud.tooltipHeader.textContent =
+        state.floorTriggered && settings.useMinFloor && state.currentParticipants <= settings.minFloor
+          ? 'IrishExit · Safety Floor Reached'
+          : 'IrishExit · Threshold Reached';
+      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (threshold was ≤${state.leaveAtOrBelow}). Disconnecting in ${remainingSec}s... Click pill to abort.`;
     } else {
       hud.statusDot.style.backgroundColor = '#34a853';
       hud.statusDot.style.boxShadow = '0 0 6px rgba(52, 168, 83, 0.6)';
@@ -1278,6 +1399,7 @@
                 currentParticipants: state.currentParticipants,
                 peakParticipants: state.peakParticipants,
                 armed: state.armed,
+                floorTriggered: state.floorTriggered,
                 leaveAtOrBelow: state.leaveAtOrBelow,
                 hasLeft: state.hasLeft
               }

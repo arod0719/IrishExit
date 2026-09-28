@@ -273,6 +273,14 @@ function refreshActiveMeetTelemetry() {
         badge.className = 'badge badge-idle';
         badge.textContent = 'Turned OFF for This Call';
         leaveAtEl.textContent = 'OFF';
+      } else if (st.hasLeft) {
+        badge.className = 'badge badge-waiting';
+        badge.textContent = 'Call Disconnected';
+        leaveAtEl.textContent = 'Left';
+      } else if (st.floorTriggered) {
+        badge.className = 'badge badge-waiting';
+        badge.textContent = 'Floor Triggered — Leaving!';
+        leaveAtEl.textContent = `≤ ${st.leaveAtOrBelow}`;
       } else if (st.armed) {
         badge.className = 'badge badge-armed';
         badge.textContent = 'Active & Watching';
