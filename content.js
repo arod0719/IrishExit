@@ -112,7 +112,7 @@
     useMinFloor: true,
     minFloor: 2,
     minPeakToArm: 3,
-    sustainedSeconds: 2,
+    sustainedSeconds: 3,
     hardDisconnectFailsafe: true,
     closeTabOnLeave: false,
     showHud: true
@@ -198,70 +198,217 @@
     return null;
   }
 
-  function parseBadgeNumber(rawText) {
+  function extractCountFromAria(aria) {
+    if (typeof aria !== 'string') {
+      return null;
+    }
+    const cleaned = aria.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
+    if (!cleaned) {
+      return null;
+    }
+
+    // Pattern 1: Explicit joined / participant / people keywords
+    // e.g. "People - 25 joined", "25 joined", "25 participants", "25 people", "25 in call"
+    const joinedMatch = cleaned.match(/(\d{1,4})\s*(?:joined|participants?|people|in\s+call|members?|attendees?)/i);
+    if (joinedMatch) {
+      const n = Number.parseInt(joinedMatch[1], 10);
+      if (n > 0) return n;
+    }
+
+    // Pattern 2: Parenthesized count e.g. "Show everyone (25)", "People (25)"
+    const parenMatch = cleaned.match(/\((\d{1,4})\)/);
+    if (parenMatch) {
+      const n = Number.parseInt(parenMatch[1], 10);
+      if (n > 0) return n;
+    }
+
+    // Pattern 3: Prefix format e.g. "People - 25", "Participants: 25", "Everyone: 25"
+    const prefixMatch = cleaned.match(/(?:people|participants?|everyone|contributors?|attendees?)\s*[-:]?\s*(\d{1,4})/i);
+    if (prefixMatch) {
+      const n = Number.parseInt(prefixMatch[1], 10);
+      if (n > 0) return n;
+    }
+
+    return null;
+  }
+
+  function extractCountFromText(rawText) {
     if (typeof rawText !== 'string') {
       return null;
     }
-    const cleaned = rawText.trim();
-    const match = cleaned.match(/^(\d{1,4})$/);
-    if (!match) {
+    const cleaned = rawText.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
+    if (!cleaned) {
       return null;
     }
-    const num = Number.parseInt(match[1], 10);
-    return num > 0 ? num : null;
+    const match = cleaned.match(/^(\d{1,4})$/);
+    if (match) {
+      const n = Number.parseInt(match[1], 10);
+      return n > 0 ? n : null;
+    }
+    return null;
+  }
+
+  function detectOverflowCount() {
+    // Look for layout overflow bubble: e.g. "+15" or "and 15 other people in the call"
+    const candidates = document.querySelectorAll(
+      '[jslog*="OverflowBubble" i], button[aria-label*="other people in the call" i], button[aria-label*="other person in the call" i], button[aria-label*="more in this call" i]'
+    );
+    for (const el of candidates) {
+      const aria = el.getAttribute('aria-label') || '';
+      const matchAria = aria.match(/and\s+(\d{1,4})\s+other\s+(?:people|person)/i) || aria.match(/(\d{1,4})\s+more/i);
+      if (matchAria) {
+        const n = Number.parseInt(matchAria[1], 10);
+        if (n > 0) return n;
+      }
+      const text = (el.textContent || '').trim();
+      const matchText = text.match(/^\+\s*(\d{1,4})$/);
+      if (matchText) {
+        const n = Number.parseInt(matchText[1], 10);
+        if (n > 0) return n;
+      }
+    }
+
+    // Also check near-leaf elements whose text content is literally "+<N>"
+    const plusBadges = document.querySelectorAll('button, span, div');
+    for (const el of plusBadges) {
+      if (el.children.length > 2) continue;
+      const txt = (el.textContent || '').trim();
+      const m = txt.match(/^\+\s*(\d{1,4})$/);
+      if (m) {
+        const n = Number.parseInt(m[1], 10);
+        if (n > 0) return n;
+      }
+    }
+    return 0;
+  }
+
+  function countUniqueParticipantTiles() {
+    const tiles = document.querySelectorAll('[data-participant-id]');
+    if (tiles.length === 0) {
+      return 0;
+    }
+    const uniqueIds = new Set();
+    for (const tile of tiles) {
+      const pid = tile.getAttribute('data-participant-id');
+      if (pid && pid !== 'undefined' && pid !== 'null') {
+        uniqueIds.add(pid);
+      }
+    }
+    return uniqueIds.size;
   }
 
   function detectParticipantCount() {
-    const hangupBtn = findHangupButton();
-    if (!hangupBtn) {
-      return null;
+    // 1. Canonical People panel button (SidePanelId.PEOPLE = 1) in bottom bar
+    const canonicalPeopleBtns = document.querySelectorAll(
+      'button[data-panel-id="1"], [role="button"][data-panel-id="1"], [data-panel-id="1"]'
+    );
+    for (const btn of canonicalPeopleBtns) {
+      const aria = btn.getAttribute('aria-label') || '';
+      const fromAria = extractCountFromAria(aria);
+      if (fromAria !== null) {
+        return fromAria;
+      }
+      const anyDigit = aria.match(/\b(\d{1,4})\b/);
+      if (anyDigit) {
+        const n = Number.parseInt(anyDigit[1], 10);
+        if (n > 0) return n;
+      }
+      const textNodes = btn.querySelectorAll('div, span');
+      for (const child of textNodes) {
+        const n = extractCountFromText(child.textContent || '');
+        if (n !== null) {
+          return n;
+        }
+      }
     }
 
+    // 2. Peninsula / Majorca Header People badge
+    const peninsulaBadges = document.querySelectorAll(
+      '[aria-labelledby*="peopleBadge" i], [data-badge-id], [jscontroller*="peopleBadge" i], [jslog*="PeopleBadgeButton" i]'
+    );
+    for (const badge of peninsulaBadges) {
+      const aria = badge.getAttribute('aria-label') || '';
+      const fromAria = extractCountFromAria(aria);
+      if (fromAria !== null) {
+        return fromAria;
+      }
+      const textNodes = badge.querySelectorAll('div, span');
+      for (const child of textNodes) {
+        const n = extractCountFromText(child.textContent || '');
+        if (n !== null) {
+          return n;
+        }
+      }
+    }
+
+    // 3. General people/participant buttons by aria-label
+    const peopleButtons = document.querySelectorAll(
+      'button[aria-label*="People" i], button[aria-label*="everyone" i], button[aria-label*="participant" i], button[aria-label*="joined" i], [role="button"][aria-label*="People" i], [role="button"][aria-label*="everyone" i], [role="button"][aria-label*="participant" i]'
+    );
+    for (const btn of peopleButtons) {
+      const aria = btn.getAttribute('aria-label') || '';
+      const fromAria = extractCountFromAria(aria);
+      if (fromAria !== null) {
+        return fromAria;
+      }
+      const anyDigit = aria.match(/\b(\d{1,4})\b/);
+      if (anyDigit) {
+        const n = Number.parseInt(anyDigit[1], 10);
+        if (n > 0) return n;
+      }
+      const textNodes = btn.querySelectorAll('div, span');
+      for (const child of textNodes) {
+        const n = extractCountFromText(child.textContent || '');
+        if (n !== null) {
+          return n;
+        }
+      }
+    }
+
+    // 4. Classic .uGOf1d class
     const badgeNodes = document.querySelectorAll('.uGOf1d');
     for (const node of badgeNodes) {
-      const parsed = parseBadgeNumber(node.textContent || '');
+      const parsed = extractCountFromText(node.textContent || '');
       if (parsed !== null) {
         return parsed;
       }
     }
 
-    const peopleButtons = document.querySelectorAll(
-      'button[aria-label*="People" i], button[aria-label*="everyone" i], button[aria-label*="participant" i], [data-panel-id="1"]'
+    // 5. Layout Grid + Overflow Bubble (Fix for >10 people grid cap)
+    const visibleTiles = countUniqueParticipantTiles();
+    const overflowCount = detectOverflowCount();
+    if (overflowCount > 0) {
+      return visibleTiles > 0 ? (visibleTiles + overflowCount) : (overflowCount + 1);
+    }
+
+    // 6. Check open People side panel headers or badges
+    const panelHeaders = document.querySelectorAll(
+      '[role="region"][aria-label*="People" i] [aria-label*="joined" i], [role="region"][aria-label*="People" i] [aria-label*="participant" i], [role="region"][aria-label*="Participants" i]'
     );
-    for (const btn of peopleButtons) {
-      const aria = btn.getAttribute('aria-label') || '';
-      const ariaMatch = aria.match(/(\d+)\s+participant/i);
-      if (ariaMatch) {
-        const num = Number.parseInt(ariaMatch[1], 10);
-        if (num > 0) {
-          return num;
-        }
-      }
-      const container = btn.parentElement || btn;
-      const textNodes = container.querySelectorAll('div, span');
-      for (const child of textNodes) {
-        const parsed = parseBadgeNumber(child.textContent || '');
-        if (parsed !== null) {
-          return parsed;
-        }
+    for (const h of panelHeaders) {
+      const fromAria = extractCountFromAria(h.getAttribute('aria-label') || '');
+      if (fromAria !== null) return fromAria;
+      const parsed = extractCountFromText(h.textContent || '');
+      if (parsed !== null) return parsed;
+    }
+
+    // 7. If visibleTiles > 1 and NO overflow bubble, we have at least visibleTiles
+    if (visibleTiles > 1) {
+      return visibleTiles;
+    }
+
+    // 8. If visibleTiles === 1, only confirm 1 if explicitly verified (lonely indicator or "just you")
+    if (visibleTiles === 1) {
+      const isExplicitlyAlone = document.querySelector(
+        '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="People - 1 joined" i]'
+      );
+      if (isExplicitlyAlone || state.peakParticipants <= 1) {
+        return 1;
       }
     }
 
-    const participantTiles = document.querySelectorAll('[data-participant-id]');
-    if (participantTiles.length > 0) {
-      const uniqueIds = new Set();
-      for (const tile of participantTiles) {
-        const pid = tile.getAttribute('data-participant-id');
-        if (pid) {
-          uniqueIds.add(pid);
-        }
-      }
-      if (uniqueIds.size > 0) {
-        return uniqueIds.size;
-      }
-    }
-
-    return 1;
+    // Indeterminate - telemetry temporarily unavailable (NEVER return 1 by default!)
+    return null;
   }
 
   function computeThresholdDetails(peak, cfg) {
@@ -434,8 +581,8 @@
         }
       }
 
-      const count = detectParticipantCount();
-      if (count === null) {
+      const hangupBtn = findHangupButton();
+      if (!hangupBtn) {
         state.inCall = false;
         state.triggerStartTime = null;
         safeSendMessage({
@@ -449,9 +596,19 @@
       }
 
       state.inCall = true;
-      state.currentParticipants = count;
-      if (count > state.peakParticipants) {
-        state.peakParticipants = count;
+
+      const detectedCount = detectParticipantCount();
+      if (detectedCount === null) {
+        // Telemetry temporarily unavailable (e.g. layout transition, full-screen presentation).
+        // Crucial safety guard: Never allow a leave trigger countdown to advance while telemetry is indeterminate!
+        state.triggerStartTime = null;
+        renderHud();
+        return;
+      }
+
+      state.currentParticipants = detectedCount;
+      if (detectedCount > state.peakParticipants) {
+        state.peakParticipants = detectedCount;
       }
 
       const details = computeThresholdDetails(state.peakParticipants, settings);
@@ -461,7 +618,7 @@
       const badgeColor = !state.meetingEnabled ? '#64748b' : state.armed ? '#10b981' : '#f59e0b';
       safeSendMessage({
         type: 'ALM_UPDATE_BADGE',
-        text: state.meetingEnabled ? String(count) : 'OFF',
+        text: state.meetingEnabled ? String(state.currentParticipants) : 'OFF',
         color: badgeColor,
         enabled: Boolean(state.meetingEnabled)
       });
@@ -472,7 +629,23 @@
           state.triggerStartTime = now;
         }
         const elapsedSec = (now - state.triggerStartTime) / 1000;
-        if (elapsedSec >= settings.sustainedSeconds) {
+
+        // Anti-glitch guard: If peak was >= 4 and detected count plunges to <= 2, require at least 3s sustained
+        const requiredSustainedSec =
+          state.peakParticipants >= 4 && state.currentParticipants <= 2
+            ? Math.max(settings.sustainedSeconds, 3)
+            : settings.sustainedSeconds;
+
+        if (elapsedSec >= requiredSustainedSec) {
+          // Double-check one final time right before executing leave
+          const finalCheck = detectParticipantCount();
+          if (finalCheck !== null && finalCheck > state.leaveAtOrBelow) {
+            state.triggerStartTime = null;
+            state.currentParticipants = finalCheck;
+            renderHud();
+            return;
+          }
+
           const reasonStr =
             details.reasons.join(' | ') ||
             `Participants dropped from ${state.peakParticipants} to ${state.currentParticipants}`;

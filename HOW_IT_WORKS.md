@@ -46,7 +46,7 @@ You can choose from three built-in presets in the extension popup:
 | Preset | Drop Threshold | Safety Floor | Delay | Best Used For |
 | :--- | :---: | :---: | :---: | :--- |
 | **Quick Exit** | 30% drop | ≤ 3 people | 1 sec | Fast syncs where meetings end promptly |
-| **Balanced (Default)** | 40% drop | ≤ 2 people | 2 sec | Everyday team meetings & presentations |
+| **Balanced (Default)** | 40% drop | ≤ 2 people | 3 sec | Everyday team meetings & presentations |
 | **Patient** | 50% drop | ≤ 2 people | 2 sec | Large webinars or Q&A sessions with high attendee fluctuation |
 
 ---
@@ -84,7 +84,7 @@ When the exit threshold is reached, IrishExit disconnects in three robust stages
 **No.** Every meeting starts with IrishExit **OFF** so it never interrupts calls you want to stay in until the very end. You can arm it with one click using the top-right button in Meet or check *"Auto-turn ON for every new call"* in settings.
 
 #### Q: What if someone's connection temporarily drops?
-The **Confirmation Delay** (default 2 seconds) ensures temporary disconnects or page reloads don't cause a premature exit.
+The **Confirmation Delay** (default 3 seconds) ensures temporary disconnects or page reloads don't cause a premature exit.
 
 #### Q: How do I reset the peak if a lot of people leave early for a break?
 Simply click **"Reset Peak"** in the extension popup or the in-call hover menu. It immediately sets the peak to the current attendee count.

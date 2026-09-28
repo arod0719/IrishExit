@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   useMinFloor: true,
   minFloor: 2,
   minPeakToArm: 3,
-  sustainedSeconds: 2,
+  sustainedSeconds: 3,
   hardDisconnectFailsafe: true,
   closeTabOnLeave: false,
   showHud: true
