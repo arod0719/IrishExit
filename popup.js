@@ -267,7 +267,11 @@ function refreshActiveMeetTelemetry() {
       }
 
       peakEl.textContent = String(st.peakParticipants);
-      nowEl.textContent = String(st.currentParticipants);
+      if (st.activePresentations && st.activePresentations > 0) {
+        nowEl.textContent = `${st.currentParticipants} (+${st.activePresentations} share)`;
+      } else {
+        nowEl.textContent = String(st.currentParticipants);
+      }
 
       if (!st.meetingEnabled) {
         badge.className = 'badge badge-idle';

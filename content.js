@@ -124,6 +124,7 @@
     meetingEnabled: false,
     currentParticipants: 0,
     peakParticipants: 0,
+    activePresentations: 0,
     armed: false,
     floorTriggered: false,
     leaveAtOrBelow: 0,
@@ -283,6 +284,110 @@
     return 0;
   }
 
+  function countActivePresentations() {
+    const presentationKeys = new Set();
+
+    // 1. Collect distinct presentation tiles by DOM attributes
+    const tileSelectors = [
+      '[data-is-presentation="true"]',
+      '[data-presentation-id]',
+      'div[data-requested-participant-id*="presentation"]',
+      '[data-participant-id*="presentation"]',
+      '[data-use-raw-local-presentation-stream]'
+    ];
+    const presTiles = document.querySelectorAll(tileSelectors.join(', '));
+    for (const tile of presTiles) {
+      const rect = tile.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0 && tile.offsetParent === null) {
+        continue;
+      }
+      const key =
+        tile.getAttribute('data-presentation-id') ||
+        tile.getAttribute('data-requested-participant-id') ||
+        tile.getAttribute('data-participant-id') ||
+        `tile-${presentationKeys.size + 1}`;
+      presentationKeys.add(key);
+    }
+
+    // 2. Check participant tiles with "(Presentation)" or "(Your Presentation)" in text
+    const participantTiles = document.querySelectorAll('[data-participant-id]');
+    for (const tile of participantTiles) {
+      const text = tile.textContent || '';
+      if (/\((?:Your\s+)?Presentation\)/i.test(text)) {
+        const pid = tile.getAttribute('data-participant-id');
+        presentationKeys.add(pid || `text-${presentationKeys.size + 1}`);
+      }
+    }
+
+    // 3. Local presentation (current user presenting screen)
+    const localStopBtn = document.querySelector(
+      'button[aria-label*="Stop presenting" i], button[aria-label*="Stop sharing" i], button[aria-label*="Stop screen sharing" i], button[aria-label*="Cancel presentation" i]'
+    );
+    const localBanner = document.querySelector(
+      '[aria-label*="You are presenting" i], [aria-label*="You\'re presenting" i], [aria-label*="Your screen is still visible" i]'
+    );
+    const isLocalPresenting = Boolean(
+      (localStopBtn && localStopBtn.offsetParent !== null) ||
+      (localBanner && localBanner.offsetParent !== null)
+    );
+
+    // If local presenting is active and no presentation tile was added yet, register at least 1
+    if (isLocalPresenting && presentationKeys.size === 0) {
+      presentationKeys.add('local-screen-share');
+    }
+
+    // 4. Remote presentation indicator in Peninsula / Top Bar when tiles are not yet mounted or are hidden
+    if (presentationKeys.size === 0) {
+      const remotePresenterBadges = document.querySelectorAll(
+        '[data-tooltip*="present" i], [aria-label*="presenting" i], [aria-label*="is presenting" i]'
+      );
+      for (const badge of remotePresenterBadges) {
+        // Exclude bottom-bar "Present now" / "Share screen" button
+        if (
+          badge.closest('button[aria-label*="Present now" i], button[aria-label*="Share screen" i]') ||
+          badge.matches('button[aria-label*="Present now" i], button[aria-label*="Share screen" i]')
+        ) {
+          continue;
+        }
+        const text = (
+          (badge.textContent || '') +
+          ' ' +
+          (badge.getAttribute('aria-label') || '') +
+          ' ' +
+          (badge.getAttribute('data-tooltip') || '')
+        ).toLowerCase();
+        if (
+          (text.includes('presenting') || text.includes('presentation') || text.includes('is presenting')) &&
+          !text.includes('present now') &&
+          !text.includes('share screen') &&
+          !text.includes('start presenting')
+        ) {
+          presentationKeys.add('remote-peninsula-presentation');
+          break;
+        }
+      }
+    }
+
+    return presentationKeys.size;
+  }
+
+  function isPresentationActive() {
+    return countActivePresentations() > 0;
+  }
+
+  function adjustForActivePresentations(rawCount) {
+    if (typeof rawCount !== 'number' || Number.isNaN(rawCount) || rawCount <= 0) {
+      return rawCount;
+    }
+    const presCount = countActivePresentations();
+    if (presCount <= 0) {
+      return rawCount;
+    }
+    // Google Meet adds a participant record for every active presentation.
+    // Subtract active presentations so we only count actual human attendees.
+    return Math.max(1, rawCount - presCount);
+  }
+
   function countUniqueParticipantTiles() {
     const tiles = document.querySelectorAll('[data-participant-id]');
     if (tiles.length === 0) {
@@ -290,54 +395,23 @@
     }
     const uniqueIds = new Set();
     for (const tile of tiles) {
+      // Exclude presentation tiles from human participant count
+      const isPres =
+        tile.getAttribute('data-is-presentation') === 'true' ||
+        tile.hasAttribute('data-presentation-id') ||
+        (tile.getAttribute('data-requested-participant-id') || '').includes('presentation') ||
+        (tile.getAttribute('data-participant-id') || '').includes('presentation') ||
+        tile.hasAttribute('data-use-raw-local-presentation-stream') ||
+        /\((?:Your\s+)?Presentation\)/i.test(tile.textContent || '');
+      if (isPres) {
+        continue;
+      }
       const pid = tile.getAttribute('data-participant-id');
       if (pid && pid !== 'undefined' && pid !== 'null') {
         uniqueIds.add(pid);
       }
     }
     return uniqueIds.size;
-  }
-
-  function isPresentationActive() {
-    // 1. Direct presentation tile or video container
-    const presTile = document.querySelector(
-      '[data-is-presentation="true"], [data-presentation-id], div[data-requested-participant-id*="presentation"]'
-    );
-    if (presTile && presTile.offsetParent !== null) {
-      return true;
-    }
-
-    // 2. Video elements inside presentation container
-    const videos = document.querySelectorAll('video');
-    for (const v of videos) {
-      const container = v.closest('[data-is-presentation], [data-presentation-id], [aria-label*="presentation" i]');
-      if (container && container.offsetParent !== null) {
-        return true;
-      }
-    }
-
-    // 3. User presenting indicator (local user sharing screen)
-    const localPresenting = document.querySelector(
-      'button[aria-label*="Stop presenting" i], [aria-label*="You are presenting" i], [aria-label*="You\'re presenting" i]'
-    );
-    if (localPresenting && localPresenting.offsetParent !== null) {
-      return true;
-    }
-
-    // 4. Remote presenter badge in peninsula or header
-    const presenterLabels = document.querySelectorAll(
-      '[data-tooltip*="present" i], [aria-label*="presenting" i], [aria-label*="presentation" i]'
-    );
-    for (const el of presenterLabels) {
-      if (el.offsetParent !== null) {
-        const text = ((el.textContent || '') + ' ' + (el.getAttribute('aria-label') || '')).toLowerCase();
-        if (text.includes('presenting') || text.includes('presentation')) {
-          return true;
-        }
-      }
-    }
-
-    return false;
   }
 
   function detectParticipantCount() {
@@ -349,18 +423,18 @@
       const aria = btn.getAttribute('aria-label') || '';
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
-        return fromAria;
+        return adjustForActivePresentations(fromAria);
       }
       const anyDigit = aria.match(/\b(\d{1,4})\b/);
       if (anyDigit) {
         const n = Number.parseInt(anyDigit[1], 10);
-        if (n > 0) return n;
+        if (n > 0) return adjustForActivePresentations(n);
       }
       const textNodes = btn.querySelectorAll('div, span');
       for (const child of textNodes) {
         const n = extractCountFromText(child.textContent || '');
         if (n !== null) {
-          return n;
+          return adjustForActivePresentations(n);
         }
       }
     }
@@ -373,13 +447,13 @@
       const aria = badge.getAttribute('aria-label') || '';
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
-        return fromAria;
+        return adjustForActivePresentations(fromAria);
       }
       const textNodes = badge.querySelectorAll('div, span');
       for (const child of textNodes) {
         const n = extractCountFromText(child.textContent || '');
         if (n !== null) {
-          return n;
+          return adjustForActivePresentations(n);
         }
       }
     }
@@ -392,18 +466,18 @@
       const aria = btn.getAttribute('aria-label') || '';
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
-        return fromAria;
+        return adjustForActivePresentations(fromAria);
       }
       const anyDigit = aria.match(/\b(\d{1,4})\b/);
       if (anyDigit) {
         const n = Number.parseInt(anyDigit[1], 10);
-        if (n > 0) return n;
+        if (n > 0) return adjustForActivePresentations(n);
       }
       const textNodes = btn.querySelectorAll('div, span');
       for (const child of textNodes) {
         const n = extractCountFromText(child.textContent || '');
         if (n !== null) {
-          return n;
+          return adjustForActivePresentations(n);
         }
       }
     }
@@ -413,7 +487,7 @@
     for (const node of badgeNodes) {
       const parsed = extractCountFromText(node.textContent || '');
       if (parsed !== null) {
-        return parsed;
+        return adjustForActivePresentations(parsed);
       }
     }
 
@@ -430,9 +504,9 @@
     );
     for (const h of panelHeaders) {
       const fromAria = extractCountFromAria(h.getAttribute('aria-label') || '');
-      if (fromAria !== null) return fromAria;
+      if (fromAria !== null) return adjustForActivePresentations(fromAria);
       const parsed = extractCountFromText(h.textContent || '');
-      if (parsed !== null) return parsed;
+      if (parsed !== null) return adjustForActivePresentations(parsed);
     }
 
     // 7. If visibleTiles > 1 and NO overflow bubble, we have at least visibleTiles
@@ -647,6 +721,7 @@
 
       state.inCall = true;
 
+      state.activePresentations = countActivePresentations();
       const detectedCount = detectParticipantCount();
       if (detectedCount === null) {
         // Telemetry temporarily unavailable (e.g. layout transition, participant departure animation).
@@ -1165,6 +1240,8 @@
       return;
     }
 
+    const presNote = state.activePresentations > 0 ? ` (+${state.activePresentations} screen share excluded)` : '';
+
     if (!state.meetingEnabled) {
       hud.statusDot.style.backgroundColor = '#9aa0a6';
       hud.statusDot.style.boxShadow = 'none';
@@ -1173,7 +1250,7 @@
       hud.container.style.color = '#9aa0a6';
       hud.titleText.textContent = 'IrishExit · Off';
       hud.tooltipHeader.textContent = 'IrishExit · Turned Off';
-      hud.tooltipStats.textContent = `Current attendees: ${state.currentParticipants}. Click this pill to activate auto-leave for this call.`;
+      hud.tooltipStats.textContent = `Current attendees: ${state.currentParticipants}${presNote}. Click this pill to activate auto-leave for this call.`;
       return;
     }
 
@@ -1185,7 +1262,7 @@
       hud.container.style.color = '#fde293';
       hud.titleText.textContent = `Waiting (need ≥${settings.minPeakToArm})`;
       hud.tooltipHeader.textContent = 'IrishExit · Waiting for Room to Fill';
-      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants}. Waiting for room to reach ≥${settings.minPeakToArm} people before activating.`;
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants}${presNote}. Waiting for room to reach ≥${settings.minPeakToArm} people before activating.`;
       return;
     }
 
@@ -1207,7 +1284,7 @@
         state.floorTriggered && settings.useMinFloor && state.currentParticipants <= settings.minFloor
           ? 'IrishExit · Safety Floor Reached'
           : 'IrishExit · Threshold Reached';
-      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants} (threshold was ≤${state.leaveAtOrBelow}). Disconnecting in ${remainingSec}s... Click pill to abort.`;
+      hud.tooltipStats.textContent = `Attendance dropped to ${state.currentParticipants}${presNote} (threshold was ≤${state.leaveAtOrBelow}). Disconnecting in ${remainingSec}s... Click pill to abort.`;
     } else {
       hud.statusDot.style.backgroundColor = '#34a853';
       hud.statusDot.style.boxShadow = '0 0 6px rgba(52, 168, 83, 0.6)';
@@ -1216,7 +1293,7 @@
       hud.container.style.color = '#a8dab5';
       hud.titleText.textContent = `Active · Leaves at ≤ ${state.leaveAtOrBelow}`;
       hud.tooltipHeader.textContent = 'IrishExit · Active & Watching';
-      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants} · Auto-leaves when room drops to ≤ ${state.leaveAtOrBelow}.`;
+      hud.tooltipStats.textContent = `Peak: ${state.peakParticipants} · Current: ${state.currentParticipants}${presNote} · Auto-leaves when room drops to ≤ ${state.leaveAtOrBelow}.`;
     }
   }
 
@@ -1398,6 +1475,7 @@
                 meetingEnabled: state.meetingEnabled,
                 currentParticipants: state.currentParticipants,
                 peakParticipants: state.peakParticipants,
+                activePresentations: state.activePresentations,
                 armed: state.armed,
                 floorTriggered: state.floorTriggered,
                 leaveAtOrBelow: state.leaveAtOrBelow,
