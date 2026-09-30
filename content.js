@@ -310,9 +310,13 @@
       return true;
     }
 
-    // 4. Tile attribution text: contains "(Presentation)" or "(Your Presentation)" or "(You, presenting)"
+    // 4. Tile attribution text: contains "(Presentation)" or "(Your Presentation)" or "(Presenting...)"
     const text = tile.textContent || '';
-    if (/\((?:Your\s+)?Presentation\)/i.test(text) || /\b(?:You,\s+presenting|is\s+presenting)\b/i.test(text)) {
+    if (
+      /\((?:Your\s+)?Presentation\)/i.test(text) ||
+      /\((?:Presenting|You,\s+presenting)[^)]*\)/i.test(text) ||
+      /\bis\s+presenting\b/i.test(text)
+    ) {
       return true;
     }
 
@@ -401,6 +405,19 @@
           break;
         }
       }
+
+      // Also scan top bar text for remote presenter status e.g. "Name (Presenting, annotating)"
+      if (presentationKeys.size === 0) {
+        const topBarCandidates = document.querySelectorAll('header span, header div, [role="banner"] span, [role="banner"] div, [role="region"] span, [role="region"] div');
+        for (const el of topBarCandidates) {
+          if (el.children.length > 2) continue;
+          const txt = el.textContent || '';
+          if (/\((?:Presenting|Presentation)[^)]*\)/i.test(txt) || /\bis\s+presenting\b/i.test(txt)) {
+            presentationKeys.add('remote-topbar-presentation');
+            break;
+          }
+        }
+      }
     }
 
     return presentationKeys.size;
@@ -448,6 +465,127 @@
     };
   }
 
+  function extractCountFromPeopleElement(element) {
+    if (!element) return null;
+
+    // 1. Aria-label / tooltip
+    const aria = (element.getAttribute('aria-label') || '') + ' ' + (element.getAttribute('data-tooltip') || '');
+    const fromAria = extractCountFromAria(aria);
+    if (fromAria !== null) return fromAria;
+
+    // Also check text in elements referenced by aria-labelledby (e.g. Peninsula hidden tooltips/labels)
+    const labelledBy = element.getAttribute('aria-labelledby') || '';
+    if (labelledBy) {
+      for (const id of labelledBy.split(/\s+/).filter(Boolean)) {
+        const refEl = document.getElementById(id);
+        if (refEl) {
+          const refTxt = (refEl.textContent || '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
+          const fromRefAria = extractCountFromAria(refTxt);
+          if (fromRefAria !== null) return fromRefAria;
+          const fromRefText = extractCountFromText(refTxt);
+          if (fromRefText !== null) return fromRefText;
+        }
+      }
+    }
+
+    // 2. Direct check on near-leaf descendant text nodes (e.g. <span>8</span>)
+    const descendants = element.querySelectorAll('span, div, p, b, strong');
+    for (const child of descendants) {
+      if (child.children.length > 2) continue;
+      const txt = (child.textContent || '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
+      const m = txt.match(/^\+?\s*(\d{1,4})$/);
+      if (m) {
+        const n = Number.parseInt(m[1], 10);
+        if (n > 0 && n <= 1000) return n;
+      }
+    }
+
+    // 3. Fallback: match digit sequence in element text if not a clock time (does not contain ':')
+    const overallText = (element.textContent || '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
+    if (!overallText.includes(':')) {
+      const match = overallText.match(/\b(\d{1,4})\b/);
+      if (match) {
+        const n = Number.parseInt(match[1], 10);
+        if (n > 0 && n <= 1000) return n;
+      }
+    }
+
+    return null;
+  }
+
+  function detectPeninsulaPeopleCount() {
+    // 1. Check buttons with aria-labelledby pointing to "People" / "Participants" (Google Meet Kinetic Peninsula spec)
+    const labelledButtons = document.querySelectorAll(
+      'button[aria-labelledby], [role="button"][aria-labelledby]'
+    );
+    for (const btn of labelledButtons) {
+      const labelId = btn.getAttribute('aria-labelledby') || '';
+      const idTokens = labelId.split(/\s+/).filter(Boolean);
+      let isPeopleButton = false;
+      for (const id of idTokens) {
+        const el = document.getElementById(id);
+        if (el) {
+          const txt = (el.textContent || '').trim().toLowerCase();
+          if (
+            txt.includes('people') ||
+            txt.includes('participant') ||
+            txt.includes('everyone') ||
+            txt.includes('contributors') ||
+            txt.includes('joined')
+          ) {
+            isPeopleButton = true;
+            break;
+          }
+        }
+      }
+      if (isPeopleButton) {
+        const count = extractCountFromPeopleElement(btn);
+        if (count !== null) return count;
+      }
+    }
+
+    // 2. Direct search of top-bar buttons with avatars and a participant count
+    const headerButtons = document.querySelectorAll(
+      'header button, [role="banner"] button, div[role="region"] button, button, [role="button"]'
+    );
+    for (const btn of headerButtons) {
+      // Exclude participant tiles and bottom call controls
+      if (
+        btn.closest('[data-participant-id]') ||
+        btn.closest('[aria-label*="Call controls" i], [role="region"][aria-label*="controls" i], [data-call-controls]')
+      ) {
+        continue;
+      }
+      const rect = btn.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+      if (rect && rect.top > (window.innerHeight ? window.innerHeight * 0.4 : 250)) {
+        // Skip buttons that are clearly in the lower half of the screen
+        continue;
+      }
+      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
+      // Exclude presentation toggle, microphone, camera, chat, settings buttons
+      if (
+        aria.includes('present') ||
+        aria.includes('microphone') ||
+        aria.includes('camera') ||
+        aria.includes('chat') ||
+        aria.includes('settings') ||
+        aria.includes('info')
+      ) {
+        continue;
+      }
+      // Check if button contains avatar images/circles
+      const hasAvatar = Boolean(
+        btn.querySelector('img, [data-avatar-url], [data-initials], svg')
+      );
+      if (hasAvatar) {
+        const count = extractCountFromPeopleElement(btn);
+        if (count !== null) return count;
+      }
+    }
+
+    return null;
+  }
+
   function detectParticipantCount() {
     // 1. Canonical People panel button (SidePanelId.PEOPLE = 1) in bottom bar or peninsula
     const canonicalPeopleBtns = document.querySelectorAll(
@@ -455,79 +593,16 @@
     );
     for (const el of canonicalPeopleBtns) {
       const btn = el.closest('button, [role="button"]') || el;
-      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
-      const fromAria = extractCountFromAria(aria);
-      if (fromAria !== null) {
-        return adjustForActivePresentations(fromAria);
-      }
-      const anyDigit = aria.match(/\b(\d{1,4})\b/);
-      if (anyDigit) {
-        const n = Number.parseInt(anyDigit[1], 10);
-        if (n > 0) return adjustForActivePresentations(n);
-      }
-      const textNodes = btn.querySelectorAll('div, span');
-      for (const child of textNodes) {
-        const n = extractCountFromText(child.textContent || '');
-        if (n !== null) {
-          return adjustForActivePresentations(n);
-        }
+      const count = extractCountFromPeopleElement(btn);
+      if (count !== null) {
+        return adjustForActivePresentations(count);
       }
     }
 
-    // 2. Peninsula / Header People badge (top-right pill in Meet)
-    const peninsulaTargets = document.querySelectorAll(
-      '[aria-labelledby*="peopleBadge" i], [data-badge-id], [jscontroller*="peopleBadge" i], [jslog*="PeopleBadgeButton" i]'
-    );
-    for (const target of peninsulaTargets) {
-      const container = target.closest('button, [role="button"]') || target.parentElement || target;
-      const aria = (container.getAttribute('aria-label') || '') + ' ' + (container.getAttribute('data-tooltip') || '');
-      const fromAria = extractCountFromAria(aria);
-      if (fromAria !== null) {
-        return adjustForActivePresentations(fromAria);
-      }
-      const anyDigit = aria.match(/\b(\d{1,4})\b/);
-      if (anyDigit) {
-        const n = Number.parseInt(anyDigit[1], 10);
-        if (n > 0) return adjustForActivePresentations(n);
-      }
-      const textNodes = container.querySelectorAll('div, span');
-      for (const child of textNodes) {
-        const n = extractCountFromText(child.textContent || '');
-        if (n !== null) {
-          return adjustForActivePresentations(n);
-        }
-      }
-    }
-
-    // Direct scan of Peninsula region buttons (e.g. top-right pill with avatars + participant count)
-    const peninsulaRegion = document.querySelector(
-      '[role="region"][aria-label*="Call feature" i], [role="region"][aria-label*="Header" i], [role="region"][aria-label*="Top bar" i]'
-    );
-    if (peninsulaRegion) {
-      const penBtns = peninsulaRegion.querySelectorAll('button, [role="button"]');
-      for (const btn of penBtns) {
-        // Exclude presentation toggle, microphone, camera, and settings buttons
-        const btnAria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
-        if (
-          btnAria.includes('present') ||
-          btnAria.includes('microphone') ||
-          btnAria.includes('camera') ||
-          btnAria.includes('settings')
-        ) {
-          continue;
-        }
-        const fromAria = extractCountFromAria(btnAria);
-        if (fromAria !== null) {
-          return adjustForActivePresentations(fromAria);
-        }
-        const textNodes = btn.querySelectorAll('div, span');
-        for (const child of textNodes) {
-          const n = extractCountFromText(child.textContent || '');
-          if (n !== null) {
-            return adjustForActivePresentations(n);
-          }
-        }
-      }
+    // 2. Peninsula / Header People badge (top-right facepile pill in Meet)
+    const peninsulaCount = detectPeninsulaPeopleCount();
+    if (peninsulaCount !== null) {
+      return adjustForActivePresentations(peninsulaCount);
     }
 
     // 3. General people/participant buttons by aria-label or tooltip
@@ -536,22 +611,9 @@
     );
     for (const el of peopleButtons) {
       const btn = el.closest('button, [role="button"]') || el;
-      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
-      const fromAria = extractCountFromAria(aria);
-      if (fromAria !== null) {
-        return adjustForActivePresentations(fromAria);
-      }
-      const anyDigit = aria.match(/\b(\d{1,4})\b/);
-      if (anyDigit) {
-        const n = Number.parseInt(anyDigit[1], 10);
-        if (n > 0) return adjustForActivePresentations(n);
-      }
-      const textNodes = btn.querySelectorAll('div, span');
-      for (const child of textNodes) {
-        const n = extractCountFromText(child.textContent || '');
-        if (n !== null) {
-          return adjustForActivePresentations(n);
-        }
+      const count = extractCountFromPeopleElement(btn);
+      if (count !== null) {
+        return adjustForActivePresentations(count);
       }
     }
 
@@ -594,26 +656,24 @@
       return humanVisibleTiles;
     }
 
-    // 8. If humanVisibleTiles <= 1 (including 0 when self-view is minimized or hidden) and NO overflow bubble:
-    if (activePres === 0) {
-      // With no presentation and no overflow bubble, <= 1 tile unambiguously indicates the user is alone in the call.
-      return 1;
-    }
-
-    // Presentation is active: participant tiles might be collapsed or hidden into a filmstrip.
+    // 8. Fallback when humanVisibleTiles <= 1:
+    // Check if Google Meet explicitly displays that the user is alone
     const isExplicitlyAlone = document.querySelector(
-      '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="People - 1 joined" i]'
+      '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="You\'re the only one" i], [aria-label*="People - 1 joined" i]'
     );
     if (isExplicitlyAlone || state.peakParticipants <= 1) {
       return 1;
     }
 
-    if (humanVisibleTiles === 1) {
-      return 1;
+    // CRITICAL: When tabbed out (document.hidden / document.visibilityState === 'hidden'),
+    // Google Meet de-renders video tiles to save power. DOM tiles plunge to 0 or 1.
+    // If the tab is hidden or if the room was previously populated (peak >= 2),
+    // NEVER assume the user is alone from missing tiles! Return null (indeterminate) to preserve state.
+    if (document.hidden || document.visibilityState === 'hidden' || activePres > 0 || state.peakParticipants >= 2) {
+      return null;
     }
 
-    // Indeterminate - telemetry temporarily unavailable during active presentation
-    return null;
+    return 1;
   }
 
   function computeThresholdDetails(peak, cfg) {
@@ -807,14 +867,12 @@
       state.activePresentations = countActivePresentations();
       const detectedCount = detectParticipantCount();
       if (detectedCount === null) {
-        // Telemetry temporarily unavailable (e.g. layout transition, participant departure animation).
-        // Crucial safety guard: If leave countdown or floor trigger is already locked in, DO NOT abort!
-        if (state.armed && !state.hasLeft && (state.floorTriggered || state.triggerStartTime !== null)) {
-          // Continue countdown execution below with previous known state
-        } else {
-          renderHud();
-          return;
-        }
+        // Telemetry temporarily unavailable (e.g. layout transition, participant departure animation, power saving, or background tab).
+        // NEVER advance or execute a leave trigger on indeterminate telemetry!
+        state.triggerStartTime = null;
+        state.floorTriggered = false;
+        renderHud();
+        return;
       } else {
         state.currentParticipants = detectedCount;
         if (detectedCount > state.peakParticipants) {
@@ -897,8 +955,14 @@
         if (elapsedSec >= requiredSustainedSec) {
           // Double-check one final time right before executing leave
           const finalCheck = detectParticipantCount();
+          // Safety guard: If telemetry is unavailable, indeterminate, or unconfirmed, DO NOT execute leave!
+          if (finalCheck === null) {
+            state.floorTriggered = false;
+            state.triggerStartTime = null;
+            renderHud();
+            return;
+          }
           if (
-            finalCheck !== null &&
             finalCheck > state.leaveAtOrBelow &&
             (!settings.useMinFloor || finalCheck > settings.minFloor)
           ) {
