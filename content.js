@@ -209,23 +209,39 @@
       return null;
     }
 
+    // Safety guard: NEVER extract count from waiting room / admission prompts
+    const lower = cleaned.toLowerCase();
+    if (
+      lower.includes('admit') ||
+      lower.includes('waiting to') ||
+      lower.includes('waiting for') ||
+      lower.includes('knocking') ||
+      lower.includes('knock') ||
+      lower.includes('requested to join') ||
+      lower.includes('requests to join') ||
+      lower.includes('guest') ||
+      lower.includes('external participants')
+    ) {
+      return null;
+    }
+
     // Pattern 1: Explicit joined / participant / people keywords
     // e.g. "People - 25 joined", "25 joined", "25 participants", "25 people", "25 in call"
-    const joinedMatch = cleaned.match(/(\d{1,4})\s*(?:joined|participants?|people|in\s+call|members?|attendees?)/i);
+    const joinedMatch = cleaned.match(/(\d{1,4})\s*(?:joined|participants?|people|in\s+call|in\s+meeting|members?|attendees?|contributors?)/i);
     if (joinedMatch) {
       const n = Number.parseInt(joinedMatch[1], 10);
       if (n > 0) return n;
     }
 
-    // Pattern 2: Parenthesized count e.g. "Show everyone (25)", "People (25)"
+    // Pattern 2: Parenthesized count e.g. "Show everyone (25)", "People (25)", "Contributors (25)"
     const parenMatch = cleaned.match(/\((\d{1,4})\)/);
     if (parenMatch) {
       const n = Number.parseInt(parenMatch[1], 10);
       if (n > 0) return n;
     }
 
-    // Pattern 3: Prefix format e.g. "People - 25", "Participants: 25", "Everyone: 25"
-    const prefixMatch = cleaned.match(/(?:people|participants?|everyone|contributors?|attendees?)\s*[-:]?\s*(\d{1,4})/i);
+    // Pattern 3: Prefix format e.g. "People - 25", "Participants: 25", "Everyone: 25", "Contributors 25"
+    const prefixMatch = cleaned.match(/(?:people|participants?|everyone|contributors?|attendees?|in\s+the\s+meeting)\s*[-:]?\s*(\d{1,4})/i);
     if (prefixMatch) {
       const n = Number.parseInt(prefixMatch[1], 10);
       if (n > 0) return n;
@@ -242,7 +258,7 @@
     if (!cleaned) {
       return null;
     }
-    const match = cleaned.match(/^(\d{1,4})$/);
+    const match = cleaned.match(/^[\+]?\s*(\d{1,4})$/);
     if (match) {
       const n = Number.parseInt(match[1], 10);
       return n > 0 ? n : null;
@@ -468,6 +484,24 @@
   function extractCountFromPeopleElement(element) {
     if (!element) return null;
 
+    const elementText = (
+      (element.textContent || '') + ' ' +
+      (element.getAttribute('aria-label') || '') + ' ' +
+      (element.getAttribute('data-tooltip') || '')
+    ).toLowerCase();
+
+    // Safety guard: NEVER extract count from waiting room, guest, or admission prompts
+    if (
+      elementText.includes('admit') ||
+      elementText.includes('waiting') ||
+      elementText.includes('knock') ||
+      elementText.includes('request') ||
+      elementText.includes('guest') ||
+      elementText.includes('external participants')
+    ) {
+      return null;
+    }
+
     // 1. Aria-label / tooltip
     const aria = (element.getAttribute('aria-label') || '') + ' ' + (element.getAttribute('data-tooltip') || '');
     const fromAria = extractCountFromAria(aria);
@@ -488,27 +522,25 @@
       }
     }
 
-    // 2. Direct check on near-leaf descendant text nodes (e.g. <span>8</span>)
+    // 2. Direct check on near-leaf descendant text nodes (e.g. <span>3</span> in the facepile pill)
     const descendants = element.querySelectorAll('span, div, p, b, strong');
     for (const child of descendants) {
       if (child.children.length > 2) continue;
       const txt = (child.textContent || '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
-      const m = txt.match(/^\+?\s*(\d{1,4})$/);
+      const m = txt.match(/^[\+]?\s*(\d{1,4})$/);
       if (m) {
         const n = Number.parseInt(m[1], 10);
         if (n > 0 && n <= 1000) return n;
       }
     }
 
-    // 3. Fallback: match digit sequence in element text if not a clock time (does not contain ':')
+    // 3. Fallback: check if element's clean text matches explicit attendee phrasing or strict number
     const overallText = (element.textContent || '').replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ').trim();
-    if (!overallText.includes(':')) {
-      const match = overallText.match(/\b(\d{1,4})\b/);
-      if (match) {
-        const n = Number.parseInt(match[1], 10);
-        if (n > 0 && n <= 1000) return n;
-      }
-    }
+    const fromOverallAria = extractCountFromAria(overallText);
+    if (fromOverallAria !== null) return fromOverallAria;
+
+    const fromStrict = extractCountFromText(overallText);
+    if (fromStrict !== null) return fromStrict;
 
     return null;
   }
@@ -519,6 +551,22 @@
       'button[aria-labelledby], [role="button"][aria-labelledby]'
     );
     for (const btn of labelledButtons) {
+      const btnAria = (
+        (btn.getAttribute('aria-label') || '') + ' ' +
+        (btn.getAttribute('data-tooltip') || '') + ' ' +
+        (btn.textContent || '')
+      ).toLowerCase();
+      if (
+        btnAria.includes('admit') ||
+        btnAria.includes('waiting') ||
+        btnAria.includes('guest') ||
+        btnAria.includes('knock') ||
+        btnAria.includes('request') ||
+        btnAria.includes('external participants')
+      ) {
+        continue;
+      }
+
       const labelId = btn.getAttribute('aria-labelledby') || '';
       const idTokens = labelId.split(/\s+/).filter(Boolean);
       let isPeopleButton = false;
@@ -526,6 +574,15 @@
         const el = document.getElementById(id);
         if (el) {
           const txt = (el.textContent || '').trim().toLowerCase();
+          if (
+            txt.includes('waiting') ||
+            txt.includes('admit') ||
+            txt.includes('knock') ||
+            txt.includes('guest')
+          ) {
+            isPeopleButton = false;
+            break;
+          }
           if (
             txt.includes('people') ||
             txt.includes('participant') ||
@@ -546,13 +603,14 @@
 
     // 2. Direct search of top-bar buttons with avatars and a participant count
     const headerButtons = document.querySelectorAll(
-      'header button, [role="banner"] button, div[role="region"] button, button, [role="button"]'
+      'header button, [role="banner"] button, div[role="region"][aria-label*="header" i] button, [data-peninsula-container] button, header [role="button"], [role="banner"] [role="button"]'
     );
     for (const btn of headerButtons) {
-      // Exclude participant tiles and bottom call controls
+      // Exclude participant tiles, bottom call controls, and open side panel contents
       if (
         btn.closest('[data-participant-id]') ||
-        btn.closest('[aria-label*="Call controls" i], [role="region"][aria-label*="controls" i], [data-call-controls]')
+        btn.closest('[aria-label*="Call controls" i], [role="region"][aria-label*="controls" i], [data-call-controls]') ||
+        btn.closest('[role="region"][aria-label*="People" i], [role="region"][aria-label*="chat" i], [role="region"][aria-label*="activities" i]')
       ) {
         continue;
       }
@@ -561,21 +619,33 @@
         // Skip buttons that are clearly in the lower half of the screen
         continue;
       }
-      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
-      // Exclude presentation toggle, microphone, camera, chat, settings buttons
+      const aria = (
+        (btn.getAttribute('aria-label') || '') + ' ' +
+        (btn.getAttribute('data-tooltip') || '') + ' ' +
+        (btn.textContent || '')
+      ).toLowerCase();
+
+      // Exclude presentation toggle, microphone, camera, chat, settings, info, and waiting/admit buttons
       if (
         aria.includes('present') ||
         aria.includes('microphone') ||
         aria.includes('camera') ||
         aria.includes('chat') ||
         aria.includes('settings') ||
-        aria.includes('info')
+        aria.includes('info') ||
+        aria.includes('admit') ||
+        aria.includes('waiting') ||
+        aria.includes('guest') ||
+        aria.includes('knock') ||
+        aria.includes('request') ||
+        aria.includes('external participants') ||
+        aria.includes('add people')
       ) {
         continue;
       }
-      // Check if button contains avatar images/circles
+      // Check if button contains actual participant avatar images/initials (NOT plain SVGs)
       const hasAvatar = Boolean(
-        btn.querySelector('img, [data-avatar-url], [data-initials], svg')
+        btn.querySelector('img[src*="googleusercontent"], img[src*="avatar"], img, [data-avatar-url], [data-initials], [class*="avatar" i], [class*="facepile" i]')
       );
       if (hasAvatar) {
         const count = extractCountFromPeopleElement(btn);
@@ -641,14 +711,60 @@
     }
 
     // 6. Check open People side panel headers or badges
-    const panelHeaders = document.querySelectorAll(
-      '[role="region"][aria-label*="People" i] [aria-label*="joined" i], [role="region"][aria-label*="People" i] [aria-label*="participant" i], [role="region"][aria-label*="Participants" i], [role="region"][aria-label*="People" i] h2, [role="region"][aria-label*="People" i] h3'
+    const peoplePanel = document.querySelector(
+      '[role="region"][aria-label*="People" i], [role="region"][aria-label*="Participants" i]'
     );
-    for (const h of panelHeaders) {
-      const fromAria = extractCountFromAria(h.getAttribute('aria-label') || '');
-      if (fromAria !== null) return adjustForActivePresentations(fromAria);
-      const parsed = extractCountFromText(h.textContent || '');
-      if (parsed !== null) return adjustForActivePresentations(parsed);
+    if (peoplePanel) {
+      // Look specifically for the "Contributors" or "In the meeting" section header
+      const inMeetingHeaders = peoplePanel.querySelectorAll(
+        '[aria-label*="contributor" i], [aria-label*="in the meeting" i], [aria-label*="joined" i], h2, h3, [role="heading"]'
+      );
+      for (const h of inMeetingHeaders) {
+        const hText = (
+          (h.getAttribute('aria-label') || '') + ' ' + (h.textContent || '')
+        ).toLowerCase();
+        // Skip waiting to join / knock sections
+        if (
+          hText.includes('waiting') ||
+          hText.includes('admit') ||
+          hText.includes('knock') ||
+          hText.includes('request') ||
+          hText.includes('guest')
+        ) {
+          continue;
+        }
+        const fromAria = extractCountFromAria(h.getAttribute('aria-label') || '');
+        if (fromAria !== null) return adjustForActivePresentations(fromAria);
+        const fromTxt = extractCountFromAria(h.textContent || '');
+        if (fromTxt !== null) return adjustForActivePresentations(fromTxt);
+      }
+
+      // Count actual in-meeting participant items (excluding waiting room items)
+      const allListItems = peoplePanel.querySelectorAll('[role="listitem"]');
+      let activeHumansInPanel = 0;
+      for (const item of allListItems) {
+        const itemText = (
+          (item.textContent || '') + ' ' + (item.getAttribute('aria-label') || '')
+        ).toLowerCase();
+        // Skip waiting to join items (e.g. items with "admit" button or in waiting section)
+        if (
+          item.closest('[aria-label*="waiting" i], [aria-label*="admit" i]') ||
+          item.querySelector('button[aria-label*="admit" i], button[data-tooltip*="admit" i]') ||
+          itemText.includes('waiting to be admitted') ||
+          itemText.includes('admit') ||
+          itemText.includes('guest')
+        ) {
+          continue;
+        }
+        // Exclude presentations and merged audio headers
+        if (itemText.includes('presentation') || itemText.includes('merged audio')) {
+          continue;
+        }
+        activeHumansInPanel++;
+      }
+      if (activeHumansInPanel > 0) {
+        return activeHumansInPanel;
+      }
     }
 
     // 7. If humanVisibleTiles > 1 and NO overflow bubble, we have at least humanVisibleTiles
