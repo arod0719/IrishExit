@@ -284,38 +284,56 @@
     return 0;
   }
 
+  function isTilePresentation(tile) {
+    if (!tile) return false;
+
+    // 1. Check if participant ID explicitly includes presentation
+    const pid = (tile.getAttribute('data-participant-id') || '').toLowerCase();
+    const reqPid = (tile.getAttribute('data-requested-participant-id') || '').toLowerCase();
+    if (pid.includes('presentation') || reqPid.includes('presentation')) {
+      return true;
+    }
+
+    // 2. Tile pin/unpin button: Google Meet uses "Pin <Name>'s presentation to your main screen" or "Pin your presentation..."
+    const pinBtn = tile.querySelector(
+      'button[aria-label*="presentation to your main screen" i], button[aria-label*="presentation from your main screen" i]'
+    );
+    if (pinBtn) {
+      return true;
+    }
+
+    // 3. Tile attribution text: contains "(Presentation)" or "(Your Presentation)"
+    const text = tile.textContent || '';
+    if (/\((?:Your\s+)?Presentation\)/i.test(text)) {
+      return true;
+    }
+
+    return false;
+  }
+
   function countActivePresentations() {
     const presentationKeys = new Set();
 
-    // 1. Collect distinct presentation tiles by DOM attributes
-    const tileSelectors = [
-      '[data-is-presentation="true"]',
-      '[data-presentation-id]',
-      'div[data-requested-participant-id*="presentation"]',
-      '[data-participant-id*="presentation"]',
-      '[data-use-raw-local-presentation-stream]'
-    ];
-    const presTiles = document.querySelectorAll(tileSelectors.join(', '));
-    for (const tile of presTiles) {
-      const rect = tile.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0 && tile.offsetParent === null) {
-        continue;
+    // 1. Scan participant tiles for presentations
+    const allTiles = document.querySelectorAll('[data-participant-id]');
+    for (const tile of allTiles) {
+      if (isTilePresentation(tile)) {
+        const pid = tile.getAttribute('data-participant-id') || `pres-tile-${presentationKeys.size + 1}`;
+        presentationKeys.add(pid);
       }
-      const key =
-        tile.getAttribute('data-presentation-id') ||
-        tile.getAttribute('data-requested-participant-id') ||
-        tile.getAttribute('data-participant-id') ||
-        `tile-${presentationKeys.size + 1}`;
-      presentationKeys.add(key);
     }
 
-    // 2. Check participant tiles with "(Presentation)" or "(Your Presentation)" in text
-    const participantTiles = document.querySelectorAll('[data-participant-id]');
-    for (const tile of participantTiles) {
-      const text = tile.textContent || '';
-      if (/\((?:Your\s+)?Presentation\)/i.test(text)) {
-        const pid = tile.getAttribute('data-participant-id');
-        presentationKeys.add(pid || `text-${presentationKeys.size + 1}`);
+    // 2. Scan open People Panel for presentation items
+    const peopleListItems = document.querySelectorAll(
+      '[role="region"][aria-label*="People" i] [role="listitem"], [role="region"][aria-label*="Participants" i] [role="listitem"], [role="listitem"][data-participant-id]'
+    );
+    let peoplePresCount = 0;
+    for (const item of peopleListItems) {
+      const text = item.textContent || '';
+      const aria = item.getAttribute('aria-label') || '';
+      if (/\b(?:Your\s+)?presentation\b/i.test(text) || /\b(?:Your\s+)?presentation\b/i.test(aria)) {
+        const id = item.getAttribute('data-participant-id') || `people-pres-${peoplePresCount++}`;
+        presentationKeys.add(id);
       }
     }
 
@@ -331,7 +349,6 @@
       (localBanner && localBanner.offsetParent !== null)
     );
 
-    // If local presenting is active and no presentation tile was added yet, register at least 1
     if (isLocalPresenting && presentationKeys.size === 0) {
       presentationKeys.add('local-screen-share');
     }
@@ -396,14 +413,7 @@
     const uniqueIds = new Set();
     for (const tile of tiles) {
       // Exclude presentation tiles from human participant count
-      const isPres =
-        tile.getAttribute('data-is-presentation') === 'true' ||
-        tile.hasAttribute('data-presentation-id') ||
-        (tile.getAttribute('data-requested-participant-id') || '').includes('presentation') ||
-        (tile.getAttribute('data-participant-id') || '').includes('presentation') ||
-        tile.hasAttribute('data-use-raw-local-presentation-stream') ||
-        /\((?:Your\s+)?Presentation\)/i.test(tile.textContent || '');
-      if (isPres) {
+      if (isTilePresentation(tile)) {
         continue;
       }
       const pid = tile.getAttribute('data-participant-id');
