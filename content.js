@@ -302,9 +302,27 @@
       return true;
     }
 
-    // 3. Tile attribution text: contains "(Presentation)" or "(Your Presentation)"
+    // 3. Tile presentation hover controls (present only on screen share tiles)
+    const presControls = tile.querySelector(
+      'button[aria-label*="Full screen" i], button[aria-label*="Fullscreen" i], button[aria-label*="zoom" i], button[aria-label*="pop out" i], button[aria-label*="Stop presenting" i], button[aria-label*="Stop sharing" i], button[aria-label*="minimize" i], button[aria-label*="expand" i]'
+    );
+    if (presControls) {
+      return true;
+    }
+
+    // 4. Tile attribution text: contains "(Presentation)" or "(Your Presentation)" or "(You, presenting)"
     const text = tile.textContent || '';
-    if (/\((?:Your\s+)?Presentation\)/i.test(text)) {
+    if (/\((?:Your\s+)?Presentation\)/i.test(text) || /\b(?:You,\s+presenting|is\s+presenting)\b/i.test(text)) {
+      return true;
+    }
+
+    // 5. Data attributes or ARIA
+    const aria = (tile.getAttribute('aria-label') || '').toLowerCase();
+    if (aria.includes('presentation') || aria.includes('screen share')) {
+      return true;
+    }
+
+    if (tile.matches('[data-is-presentation="true"], [data-presentation-id]')) {
       return true;
     }
 
@@ -408,29 +426,36 @@
   function countUniqueParticipantTiles() {
     const tiles = document.querySelectorAll('[data-participant-id]');
     if (tiles.length === 0) {
-      return 0;
+      return { humanCount: 0, presCount: 0, totalCount: 0 };
     }
-    const uniqueIds = new Set();
+    const humanIds = new Set();
+    const presentationIds = new Set();
     for (const tile of tiles) {
-      // Exclude presentation tiles from human participant count
-      if (isTilePresentation(tile)) {
+      const pid = tile.getAttribute('data-participant-id');
+      if (!pid || pid === 'undefined' || pid === 'null') {
         continue;
       }
-      const pid = tile.getAttribute('data-participant-id');
-      if (pid && pid !== 'undefined' && pid !== 'null') {
-        uniqueIds.add(pid);
+      if (isTilePresentation(tile)) {
+        presentationIds.add(pid);
+      } else {
+        humanIds.add(pid);
       }
     }
-    return uniqueIds.size;
+    return {
+      humanCount: humanIds.size,
+      presCount: presentationIds.size,
+      totalCount: humanIds.size + presentationIds.size
+    };
   }
 
   function detectParticipantCount() {
-    // 1. Canonical People panel button (SidePanelId.PEOPLE = 1) in bottom bar
+    // 1. Canonical People panel button (SidePanelId.PEOPLE = 1) in bottom bar or peninsula
     const canonicalPeopleBtns = document.querySelectorAll(
       'button[data-panel-id="1"], [role="button"][data-panel-id="1"], [data-panel-id="1"]'
     );
-    for (const btn of canonicalPeopleBtns) {
-      const aria = btn.getAttribute('aria-label') || '';
+    for (const el of canonicalPeopleBtns) {
+      const btn = el.closest('button, [role="button"]') || el;
+      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
         return adjustForActivePresentations(fromAria);
@@ -449,17 +474,23 @@
       }
     }
 
-    // 2. Peninsula / Majorca Header People badge
-    const peninsulaBadges = document.querySelectorAll(
+    // 2. Peninsula / Header People badge (top-right pill in Meet)
+    const peninsulaTargets = document.querySelectorAll(
       '[aria-labelledby*="peopleBadge" i], [data-badge-id], [jscontroller*="peopleBadge" i], [jslog*="PeopleBadgeButton" i]'
     );
-    for (const badge of peninsulaBadges) {
-      const aria = badge.getAttribute('aria-label') || '';
+    for (const target of peninsulaTargets) {
+      const container = target.closest('button, [role="button"]') || target.parentElement || target;
+      const aria = (container.getAttribute('aria-label') || '') + ' ' + (container.getAttribute('data-tooltip') || '');
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
         return adjustForActivePresentations(fromAria);
       }
-      const textNodes = badge.querySelectorAll('div, span');
+      const anyDigit = aria.match(/\b(\d{1,4})\b/);
+      if (anyDigit) {
+        const n = Number.parseInt(anyDigit[1], 10);
+        if (n > 0) return adjustForActivePresentations(n);
+      }
+      const textNodes = container.querySelectorAll('div, span');
       for (const child of textNodes) {
         const n = extractCountFromText(child.textContent || '');
         if (n !== null) {
@@ -468,12 +499,44 @@
       }
     }
 
-    // 3. General people/participant buttons by aria-label
-    const peopleButtons = document.querySelectorAll(
-      'button[aria-label*="People" i], button[aria-label*="everyone" i], button[aria-label*="participant" i], button[aria-label*="joined" i], [role="button"][aria-label*="People" i], [role="button"][aria-label*="everyone" i], [role="button"][aria-label*="participant" i]'
+    // Direct scan of Peninsula region buttons (e.g. top-right pill with avatars + participant count)
+    const peninsulaRegion = document.querySelector(
+      '[role="region"][aria-label*="Call feature" i], [role="region"][aria-label*="Header" i], [role="region"][aria-label*="Top bar" i]'
     );
-    for (const btn of peopleButtons) {
-      const aria = btn.getAttribute('aria-label') || '';
+    if (peninsulaRegion) {
+      const penBtns = peninsulaRegion.querySelectorAll('button, [role="button"]');
+      for (const btn of penBtns) {
+        // Exclude presentation toggle, microphone, camera, and settings buttons
+        const btnAria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
+        if (
+          btnAria.includes('present') ||
+          btnAria.includes('microphone') ||
+          btnAria.includes('camera') ||
+          btnAria.includes('settings')
+        ) {
+          continue;
+        }
+        const fromAria = extractCountFromAria(btnAria);
+        if (fromAria !== null) {
+          return adjustForActivePresentations(fromAria);
+        }
+        const textNodes = btn.querySelectorAll('div, span');
+        for (const child of textNodes) {
+          const n = extractCountFromText(child.textContent || '');
+          if (n !== null) {
+            return adjustForActivePresentations(n);
+          }
+        }
+      }
+    }
+
+    // 3. General people/participant buttons by aria-label or tooltip
+    const peopleButtons = document.querySelectorAll(
+      'button[aria-label*="People" i], button[aria-label*="everyone" i], button[aria-label*="participant" i], button[aria-label*="joined" i], [role="button"][aria-label*="People" i], [role="button"][aria-label*="everyone" i], [role="button"][aria-label*="participant" i], [data-tooltip*="everyone" i], [data-tooltip*="People" i], [data-tooltip*="participant" i]'
+    );
+    for (const el of peopleButtons) {
+      const btn = el.closest('button, [role="button"]') || el;
+      const aria = (btn.getAttribute('aria-label') || '') + ' ' + (btn.getAttribute('data-tooltip') || '');
       const fromAria = extractCountFromAria(aria);
       if (fromAria !== null) {
         return adjustForActivePresentations(fromAria);
@@ -502,15 +565,22 @@
     }
 
     // 5. Layout Grid + Overflow Bubble (Fix for >10 people grid cap)
-    const visibleTiles = countUniqueParticipantTiles();
+    const tileStats = countUniqueParticipantTiles();
+    const activePres = countActivePresentations();
+    // How many presentations in the DOM weren't explicitly tagged as presentation tiles?
+    const unaccountedPres = Math.max(0, activePres - tileStats.presCount);
+    // True human visible tiles on screen
+    const humanVisibleTiles = Math.max(0, tileStats.humanCount - unaccountedPres);
+
     const overflowCount = detectOverflowCount();
     if (overflowCount > 0) {
-      return visibleTiles > 0 ? (visibleTiles + overflowCount) : (overflowCount + 1);
+      const rawCombined = humanVisibleTiles > 0 ? (humanVisibleTiles + overflowCount) : (overflowCount + 1);
+      return Math.max(1, rawCombined);
     }
 
     // 6. Check open People side panel headers or badges
     const panelHeaders = document.querySelectorAll(
-      '[role="region"][aria-label*="People" i] [aria-label*="joined" i], [role="region"][aria-label*="People" i] [aria-label*="participant" i], [role="region"][aria-label*="Participants" i]'
+      '[role="region"][aria-label*="People" i] [aria-label*="joined" i], [role="region"][aria-label*="People" i] [aria-label*="participant" i], [role="region"][aria-label*="Participants" i], [role="region"][aria-label*="People" i] h2, [role="region"][aria-label*="People" i] h3'
     );
     for (const h of panelHeaders) {
       const fromAria = extractCountFromAria(h.getAttribute('aria-label') || '');
@@ -519,14 +589,13 @@
       if (parsed !== null) return adjustForActivePresentations(parsed);
     }
 
-    // 7. If visibleTiles > 1 and NO overflow bubble, we have at least visibleTiles
-    if (visibleTiles > 1) {
-      return visibleTiles;
+    // 7. If humanVisibleTiles > 1 and NO overflow bubble, we have at least humanVisibleTiles
+    if (humanVisibleTiles > 1) {
+      return humanVisibleTiles;
     }
 
-    // 8. If visibleTiles <= 1 (including 0 when self-view is minimized or hidden) and NO overflow bubble:
-    const presActive = isPresentationActive();
-    if (!presActive) {
+    // 8. If humanVisibleTiles <= 1 (including 0 when self-view is minimized or hidden) and NO overflow bubble:
+    if (activePres === 0) {
       // With no presentation and no overflow bubble, <= 1 tile unambiguously indicates the user is alone in the call.
       return 1;
     }
@@ -536,6 +605,10 @@
       '[aria-label*="Just you" i], [aria-label*="You are the only person" i], [aria-label*="People - 1 joined" i]'
     );
     if (isExplicitlyAlone || state.peakParticipants <= 1) {
+      return 1;
+    }
+
+    if (humanVisibleTiles === 1) {
       return 1;
     }
 

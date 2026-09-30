@@ -269,8 +269,10 @@ function refreshActiveMeetTelemetry() {
       peakEl.textContent = String(st.peakParticipants);
       if (st.activePresentations && st.activePresentations > 0) {
         nowEl.textContent = `${st.currentParticipants} (+${st.activePresentations} share)`;
+        nowEl.title = `${st.currentParticipants} human attendees (${st.activePresentations} screen share excluded)`;
       } else {
         nowEl.textContent = String(st.currentParticipants);
+        nowEl.title = `${st.currentParticipants} attendees`;
       }
 
       if (!st.meetingEnabled) {
