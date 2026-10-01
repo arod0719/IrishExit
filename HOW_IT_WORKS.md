@@ -56,6 +56,15 @@ You can choose from three built-in presets in the extension popup:
 * **What is it?** IrishExit waits until at least **3 people** have entered the meeting before it begins watching for drops.
 * **Why this matters:** When you join a meeting room early and only 1 or 2 people are there, you don't want the extension to trigger an immediate exit. IrishExit stays in a **"Waiting"** state until the call is in session.
 
+## 🧠 Intelligent Telemetry & Stream Accounting
+
+IrishExit doesn't just scrape a single element—it runs a multi-layered detection engine that accurately reflects human attendance:
+
+* **Peninsula People Badge Extraction**: Resolves Google Meet's modern Kinetic header badge via `aria-labelledby` linkages and avatar facepiles to extract verified headcount.
+* **Presentation Stream Accounting**: When anyone shares their screen, Google Meet logs an extra stream record (e.g. 2 people + 1 share looks like 3 attendees). IrishExit identifies active local and remote presentations across 4 layers and subtracts them ($\text{Attendees} = \text{Raw Count} - \text{Presentations}$), keeping your true human baseline steady.
+* **Background Tab & Power-Saver Resilience**: When you switch tabs or multitask, Meet suspends off-screen video decoders after ~5 minutes. IrishExit knows DOM video tiles collapse in background tabs and never assumes a room is empty from missing tiles alone.
+* **Waiting Room & Knock Filtering**: Ignores pending external guests (*"Admit 1 guest"*, *"Waiting to be admitted"*) and audio groupings (*"Merged audio"*), ensuring admission prompts never interfere with in-call attendance.
+
 ---
 
 ## 🔒 3-Layer Guaranteed Hangup

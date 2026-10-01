@@ -77,6 +77,12 @@ Tune exit delays, configure safety net floors, and enable failsafe disconnects w
   - **Safety Net Floor** (default `≤ 2` people): Guarantees you never get trapped 1-on-1 with the presenter.
 - **Smart Activation Threshold (≥ 3 people)**:
   - Waits until meeting attendees actually arrive before arming, so joining an empty room early won't trigger an exit.
+- **Presentation-Aware Stream Accounting**:
+  - Automatically identifies local and remote screen shares across 4 telemetry layers and deducts them from Meet's headcount. Presenting never artificially inflates your peak or causes exits when sharing stops.
+- **Background Tab & Power-Saver Resilient**:
+  - Built specifically for multitasking. Immune to Google Meet's background video tile suspension and Chrome tab throttling when you work in another tab or window.
+- **Waiting Room & Knock Prompt Filtering**:
+  - Intelligently filters out external guest knock banners (*"Admit 1 guest"*) and waiting room accordion counts, ensuring guest requests never interrupt active calls.
 - **3-Layer Guaranteed Hangup**:
   1. Triggers Google Meet's official **Leave call** button.
   2. Bypasses host confirmation dialogs (*"Just leave the call"*).
